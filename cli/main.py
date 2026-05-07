@@ -10,6 +10,7 @@ from rich.console import Console, Group
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 from rich.text import Text
 
 from adalove.api.client import AdaloveClient
@@ -136,10 +137,8 @@ def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
     return lines
 
 
-def _build_grid(data: dict) -> "Table":
+def _build_grid(data: dict) -> Table:
     """Build the right-pane data grid from a data dict."""
-    from rich.table import Table
-
     def cell(title: str, value: str) -> str:
         return f"[dim]{title}[/dim]\n[bold white]{value}[/bold white]"
 
