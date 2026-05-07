@@ -187,17 +187,17 @@ def dashboard() -> None:
     w, h = console.size
     layout_h = max(h - 6, 12)
     pane_w = w // 2 - 4
-    pane_h = layout_h - 4
+    pane_h = layout_h - 6  # 4 for group chrome + 2 for panel border
 
-    absent_pct = f"{round((1 - data['presenca']) * 100)}%"
-    pie_lines = _draw_pie(pane_w, pane_h, float(data["presenca"]))
+    presenca_pct = f"{round(float(data['presenca']) * 100)}%"
+    pie_lines = _draw_pie(max(pane_w, 1), max(pane_h, 1), float(data["presenca"]))
 
     pie_group = Group(
         Align(Text("Presença", style="bold white"), align="center"),
         Text(""),
         *[Text(line, style="dim white") for line in pie_lines],
         Text(""),
-        Align(Text(absent_pct, style="white"), align="center"),
+        Align(Text(presenca_pct, style="white"), align="center"),
     )
     left_panel = Panel(pie_group, border_style="cyan", height=layout_h)
     right_panel = Panel(
