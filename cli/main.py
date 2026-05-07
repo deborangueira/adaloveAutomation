@@ -143,7 +143,7 @@ def _build_grid(data: dict) -> Table:
         return f"[dim]{title}[/dim]\n[bold white]{value}[/bold white]"
 
     tbl = Table(
-        box=box.HORIZONTALS,
+        box=box.SIMPLE_HEAVY,
         show_header=False,
         padding=(1, 2),
         expand=True,
@@ -214,11 +214,13 @@ def dashboard() -> None:
     console.print(layout)
     console.print()
 
-    questionary.select(
+    result = questionary.select(
         "Dashboard",
         choices=[questionary.Choice("← Back to menu", value="back")],
         style=STYLE,
     ).ask()
+    if result is None:
+        raise typer.Exit(0)
 
 
 # ── main menu ─────────────────────────────────────────────────────────────────
