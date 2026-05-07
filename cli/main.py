@@ -181,25 +181,25 @@ def _build_grid(data: dict) -> Table:
 
 def dashboard() -> None:
     """Render the full-terminal ASCII dashboard and wait for the user to go back."""
-    _section("Dashboard")
-
     data = dict(MOCK)
     w, h = console.size
-    layout_h = max(h - 6, 12)
-    pane_w = w // 2 - 4
-    pane_h = layout_h - 6  # 4 for group chrome + 2 for panel border
+    layout_h = max(h - 3, 12)
+    pane_w = max(w // 2 - 4, 1)
+    pane_h = max(layout_h - 2, 1)  # full panel inner height
 
     presenca_pct = f"{round(float(data['presenca']) * 100)}%"
-    pie_lines = _draw_pie(max(pane_w, 1), max(pane_h, 1), float(data["presenca"]))
+    pie_lines = _draw_pie(pane_w, pane_h, float(data["presenca"]))
 
-    pie_group = Group(
-        Align(Text("Presença", style="bold white"), align="center"),
-        Text(""),
-        *[Text(line, style="white") for line in pie_lines],
-        Text(""),
-        Align(Text(presenca_pct, style="white"), align="center"),
+    left_panel = Panel(
+        Align(
+            Group(*[Text(line, style="white") for line in pie_lines]),
+            align="center",
+            vertical="middle",
+        ),
+        title=f"[bold white]Presença  {presenca_pct}[/bold white]",
+        border_style="cyan",
+        height=layout_h,
     )
-    left_panel = Panel(pie_group, border_style="cyan", height=layout_h)
     right_panel = Panel(
         Align(_build_grid(data), vertical="middle"),
         border_style="cyan",
