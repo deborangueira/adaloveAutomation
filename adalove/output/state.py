@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-_STATE_FILE = Path.cwd() / "output" / ".state.json"
-
 
 def _path() -> Path:
     return Path.cwd() / "output" / ".state.json"
