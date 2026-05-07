@@ -8,6 +8,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
+import math
+
+from rich import box
+from rich.console import Group
+from rich.layout import Layout
 
 from adalove.api.client import AdaloveClient
 from adalove.config.settings import load_config, save_config
@@ -24,6 +29,17 @@ app = typer.Typer(
 )
 console = Console()
 err_console = Console(stderr=True)
+
+MOCK: dict[str, float | int] = {
+    "presenca": 0.92,
+    "acumulada": 0.0,
+    "ate_o_momento": 0.0,
+    "nota_necessaria": 0.0,
+    "semana_atual": 3,
+    "ponderadas_semana": 5,
+    "auto_estudos_feitos": 0.0,
+    "auto_estudos_a_fazer": 0.0,
+}
 
 BANNER = """\
  █████╗ ██████╗  █████╗ ██╗      ██████╗ ██╗   ██╗███████╗
