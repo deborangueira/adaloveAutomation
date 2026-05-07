@@ -145,7 +145,7 @@ def _build_grid(data: dict) -> Table:
     tbl = Table(
         box=box.SIMPLE_HEAVY,
         show_header=False,
-        padding=(1, 2),
+        padding=(0, 2),
         expand=True,
     )
     tbl.add_column("left", ratio=5, justify="center")
