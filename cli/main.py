@@ -1,18 +1,16 @@
+import math
 from pathlib import Path
 
 import questionary
 import typer
 from questionary import Style
+from rich import box
 from rich.align import Align
-from rich.console import Console
+from rich.console import Console, Group
+from rich.layout import Layout
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
-import math
-
-from rich import box
-from rich.console import Group
-from rich.layout import Layout
 
 from adalove.api.client import AdaloveClient
 from adalove.config.settings import load_config, save_config
