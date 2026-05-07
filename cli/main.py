@@ -102,6 +102,40 @@ def _info(msg: str) -> None:
     console.print(f"  [dim]•[/dim]  {msg}")
 
 
+# ── dashboard helpers ─────────────────────────────────────────────────────────
+
+def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
+    """Return a list of `height` strings of length `width` forming a pie chart.
+
+    fraction — the "present" share (0.0–1.0).  The absent slice sits at 12 o'clock.
+    Characters are ~2× taller than wide; horizontal distances are halved to compensate.
+    """
+    absent = 1.0 - fraction
+    absent_angle = absent * 2 * math.pi
+
+    cx = width // 2
+    cy = height // 2
+    r = min(width // 4, height // 2 - 2)
+
+    lines: list[str] = []
+    for row in range(height):
+        chars: list[str] = []
+        for col in range(width):
+            dx = (col - cx) / 2.0   # halve x to correct aspect ratio
+            dy = row - cy
+            if math.sqrt(dx * dx + dy * dy) <= r:
+                angle = math.atan2(dx, -dy) % (2 * math.pi)  # 0 = top, clockwise
+                half = absent_angle / 2
+                if angle <= half or angle >= 2 * math.pi - half:
+                    chars.append(" ")   # absent sector
+                else:
+                    chars.append("█")  # present sector
+            else:
+                chars.append(" ")
+        lines.append("".join(chars))
+    return lines
+
+
 # ── main menu ─────────────────────────────────────────────────────────────────
 
 @app.callback()
