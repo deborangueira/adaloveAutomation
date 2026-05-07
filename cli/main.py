@@ -136,6 +136,50 @@ def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
     return lines
 
 
+def _build_grid(data: dict) -> "Table":
+    """Build the right-pane data grid from a data dict."""
+    from rich.table import Table
+
+    def cell(title: str, value: str) -> str:
+        return f"[dim]{title}[/dim]\n[bold white]{value}[/bold white]"
+
+    tbl = Table(
+        box=box.HORIZONTALS,
+        show_header=False,
+        padding=(1, 2),
+        expand=True,
+    )
+    tbl.add_column("left", ratio=5, justify="center")
+    tbl.add_column("sep", width=1, justify="center")
+    tbl.add_column("right", ratio=5, justify="center")
+
+    # Row 1 — two columns
+    tbl.add_row(
+        cell("Acumulada", str(data["acumulada"])),
+        "│",
+        cell("Até o momento", str(data["ate_o_momento"])),
+    )
+    # Row 2 — full width (right cells left empty)
+    tbl.add_row(
+        cell("Nota necessária da prova", str(data["nota_necessaria"])),
+        "",
+        "",
+    )
+    # Row 3 — two columns
+    tbl.add_row(
+        cell("Semana atual", str(data["semana_atual"])),
+        "│",
+        cell("ponderadas dessa semana", str(data["ponderadas_semana"])),
+    )
+    # Row 4 — two columns
+    tbl.add_row(
+        cell("Auto estudos feitos", str(data["auto_estudos_feitos"])),
+        "│",
+        cell("Auto estudos a fazer", str(data["auto_estudos_a_fazer"])),
+    )
+    return tbl
+
+
 # ── main menu ─────────────────────────────────────────────────────────────────
 
 @app.callback()

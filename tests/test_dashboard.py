@@ -1,5 +1,6 @@
 import math
-from cli.main import _draw_pie
+from cli.main import _draw_pie, _build_grid, MOCK
+from rich.table import Table
 
 
 def test_draw_pie_dimensions():
@@ -38,3 +39,19 @@ def test_draw_pie_partial_has_both():
                 empty_interior.append(c)
     assert len(filled) > 0
     assert len(empty_interior) > 0
+
+
+def test_build_grid_returns_table():
+    result = _build_grid(MOCK)
+    assert isinstance(result, Table)
+
+
+def test_build_grid_row_count():
+    result = _build_grid(MOCK)
+    assert len(result.rows) == 4
+
+
+def test_build_grid_column_count():
+    result = _build_grid(MOCK)
+    # 3 columns: left, sep, right
+    assert len(result.columns) == 3
