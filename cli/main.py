@@ -116,7 +116,7 @@ def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
 
     cx = width // 2
     cy = height // 2
-    r = min(width // 4, height // 2 - 2)
+    r = max(1, min(width // 4, height // 2 - 1))
 
     lines: list[str] = []
     for row in range(height):
@@ -181,7 +181,7 @@ def _build_grid(data: dict) -> Table:
 
 def dashboard() -> None:
     """Render the full-terminal ASCII dashboard and wait for the user to go back."""
-    _header("Dashboard")
+    _section("Dashboard")
 
     data = dict(MOCK)
     w, h = console.size
@@ -195,7 +195,7 @@ def dashboard() -> None:
     pie_group = Group(
         Align(Text("Presença", style="bold white"), align="center"),
         Text(""),
-        *[Text(line, style="dim white") for line in pie_lines],
+        *[Text(line, style="white") for line in pie_lines],
         Text(""),
         Align(Text(presenca_pct, style="white"), align="center"),
     )
