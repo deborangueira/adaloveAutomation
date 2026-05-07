@@ -179,6 +179,48 @@ def _build_grid(data: dict) -> Table:
     return tbl
 
 
+def dashboard() -> None:
+    """Render the full-terminal ASCII dashboard and wait for the user to go back."""
+    _header("Dashboard")
+
+    data = dict(MOCK)
+    w, h = console.size
+    layout_h = max(h - 6, 12)
+    pane_w = w // 2 - 4
+    pane_h = layout_h - 4
+
+    absent_pct = f"{round((1 - data['presenca']) * 100)}%"
+    pie_lines = _draw_pie(pane_w, pane_h, float(data["presenca"]))
+
+    pie_group = Group(
+        Align(Text("Presença", style="bold white"), align="center"),
+        Text(""),
+        *[Text(line, style="dim white") for line in pie_lines],
+        Text(""),
+        Align(Text(absent_pct, style="white"), align="center"),
+    )
+    left_panel = Panel(pie_group, border_style="cyan", height=layout_h)
+    right_panel = Panel(
+        Align(_build_grid(data), vertical="middle"),
+        border_style="cyan",
+        height=layout_h,
+    )
+
+    layout = Layout()
+    layout.split_row(Layout(name="left"), Layout(name="right"))
+    layout["left"].update(left_panel)
+    layout["right"].update(right_panel)
+
+    console.print(layout)
+    console.print()
+
+    questionary.select(
+        "Dashboard",
+        choices=[questionary.Choice("← Back to menu", value="back")],
+        style=STYLE,
+    ).ask()
+
+
 # ── main menu ─────────────────────────────────────────────────────────────────
 
 @app.callback()
@@ -197,9 +239,10 @@ def main(ctx: typer.Context) -> None:
     choice = questionary.select(
         "Choose an option:",
         choices=[
-            questionary.Choice("  Setup    —  Configure credentials & teacher mapping", value="setup"),
-            questionary.Choice("  Fetch    —  Download and filter activities",          value="fetch"),
-            questionary.Choice("  Exit",                                                value="exit"),
+            questionary.Choice("  Setup      —  Configure credentials & teacher mapping", value="setup"),
+            questionary.Choice("  Fetch      —  Download and filter activities",           value="fetch"),
+            questionary.Choice("  Dashboard  —  View your progress summary",               value="dashboard"),
+            questionary.Choice("  Exit",                                                    value="exit"),
         ],
         style=STYLE,
     ).ask()
@@ -211,6 +254,8 @@ def main(ctx: typer.Context) -> None:
         check(ctx)
     elif choice == "fetch":
         ctx.invoke(fetch)
+    elif choice == "dashboard":
+        dashboard()
 
 
 # ── check ─────────────────────────────────────────────────────────────────────
