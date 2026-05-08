@@ -81,7 +81,7 @@ def capture_credentials() -> tuple[str, str]:
                 page.wait_for_timeout(_TIMEOUT_MS)
             finally:
                 context.close()
-    except PermissionError:
+    except (PermissionError, TimeoutError):
         raise
     except Exception as exc:
         raise TimeoutError(f"Browser capture failed: {exc}") from exc
