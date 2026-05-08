@@ -55,12 +55,14 @@ def _compute_week(section_date_str: str) -> int:
         section = date.fromisoformat(section_date_str)
     except ValueError:
         return 1
-    return (date.today() - section).days // 7 + 1
+    return max(1, (date.today() - section).days // 7 + 1)
 
 
 def _weighted_avg(activities: list[Activity]) -> float:
     graded = [a for a in activities if a.grade_result >= 0]
-    total_weight = sum(a.grade_weight for a in activities)
-    if not graded or total_weight == 0:
+    if not graded:
+        return 0.0
+    total_weight = sum(a.grade_weight for a in graded)
+    if total_weight == 0:
         return 0.0
     return sum(a.grade_result * a.grade_weight for a in graded) / total_weight
