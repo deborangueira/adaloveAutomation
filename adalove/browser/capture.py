@@ -19,12 +19,12 @@ def _best_response(captured: list[tuple[str, str, int]]) -> tuple[str, str]:
     """Pick the entry with the largest response body from (url, auth, body_size) list."""
     if not captured:
         raise TimeoutError(
-            "No API request was captured within the timeout. "
-            "Make sure you are logged into Adalove and try again."
+            "Nenhuma requisição da API foi capturada dentro do tempo limite. "
+            "Certifique-se de estar logado no Adalove e tente novamente."
         )
     url, auth, _ = max(captured, key=lambda x: x[2])
     if not auth:
-        raise ValueError("Captured request had no Authorization header.")
+        raise ValueError("A requisição capturada não possui cabeçalho de autorização.")
     return url, auth
 
 
@@ -39,8 +39,8 @@ def capture_credentials() -> tuple[str, str]:
     """
     if not _PLAYWRIGHT_AVAILABLE:
         raise ImportError(
-            "Playwright is not installed. "
-            "Run: pip install playwright && playwright install chromium"
+            "Playwright não está instalado. "
+            "Execute: pip install playwright && playwright install chromium"
         )
 
     captured: list[tuple[str, str, int]] = []
@@ -70,7 +70,7 @@ def capture_credentials() -> tuple[str, str]:
 
                 if not page.url.startswith(_ADALOVE_URL):
                     raise PermissionError(
-                        "Not logged in — open Adalove in your browser, log in, then re-run setup."
+                        "Não autenticado — abra o Adalove no seu navegador, faça login e execute o setup novamente."
                     )
 
                 try:
@@ -84,6 +84,6 @@ def capture_credentials() -> tuple[str, str]:
     except (PermissionError, TimeoutError):
         raise
     except Exception as exc:
-        raise TimeoutError(f"Browser capture failed: {exc}") from exc
+        raise TimeoutError(f"Falha na captura pelo navegador: {exc}") from exc
 
     return _best_response(captured)

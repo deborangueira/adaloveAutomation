@@ -184,7 +184,7 @@ def dashboard() -> None:
     try:
         config = load_config()
     except FileNotFoundError:
-        _err("No config.json found. Run Setup first.")
+        _err("config.json não encontrado. Execute o Setup primeiro.")
         return
 
     console.print("  Conectando...")
@@ -192,7 +192,7 @@ def dashboard() -> None:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
         student_status = client.fetch_student_status()
     except KeyError as e:
-        _err(f"config.json is missing key {e}. Run Setup again.")
+        _err(f"config.json não possui a chave {e}. Execute o Setup novamente.")
         return
     except PermissionError as e:
         _err(str(e))
@@ -234,7 +234,7 @@ def dashboard() -> None:
 
     result = questionary.select(
         "Dashboard",
-        choices=[questionary.Choice("← Back to menu", value="back")],
+        choices=[questionary.Choice("← Voltar ao menu", value="back")],
         style=STYLE,
     ).ask()
     if result is None:
@@ -248,21 +248,21 @@ def main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
 
-    _header("Activity Manager")
+    _header("Gerenciador de Atividades")
 
     _window(
-        "Main Menu",
-        "[dim]↑ ↓  navigate    Enter  confirm[/dim]",
+        "Menu Principal",
+        "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
     )
     console.print()
 
     choice = questionary.select(
-        "Choose an option:",
+        "Escolha uma opção:",
         choices=[
-            questionary.Choice("  Setup      —  Configure credentials & teacher mapping", value="setup"),
-            questionary.Choice("  Fetch      —  Download and filter activities",           value="fetch"),
-            questionary.Choice("  Dashboard  —  View your progress summary",               value="dashboard"),
-            questionary.Choice("  Exit",                                                    value="exit"),
+            questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
+            questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
+            questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
+            questionary.Choice("  Sair",                                                              value="exit"),
         ],
         style=STYLE,
     ).ask()
@@ -282,52 +282,52 @@ def main(ctx: typer.Context) -> None:
 
 @app.command()
 def check(ctx: typer.Context) -> None:
-    """Verify the current setup is still working."""
-    _section("Checking Setup")
+    """Verifica se a configuração atual ainda está funcionando."""
+    _section("Verificando Configuração")
 
     try:
         config = load_config()
     except FileNotFoundError:
-        _err("No config.json found.")
+        _err("config.json não encontrado.")
         console.print()
-        _info("Redirecting to Setup...")
+        _info("Redirecionando para o Setup...")
         console.print()
         setup()
         return
 
-    console.print("  Connecting to API...")
+    console.print("  Conectando à API...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
         activities = client.fetch_activities()
     except KeyError as e:
-        _err(f"config.json is missing key {e}.")
+        _err(f"config.json não possui a chave {e}.")
         console.print()
-        _info("Redirecting to Setup...")
+        _info("Redirecionando para o Setup...")
         console.print()
         setup()
         return
     except PermissionError:
-        _err("Token expired or invalid.")
+        _err("Token expirado ou inválido.")
         console.print()
-        _info("Attempting to auto-capture new credentials...")
+        _info("Tentando capturar novas credenciais automaticamente...")
         console.print()
         try:
             from adalove.browser.capture import capture_credentials
             api_url, new_token = capture_credentials()
-            _ok("Credentials captured. Reconfiguring...")
+            _ok("Credenciais capturadas. Reconfigurando...")
             console.print()
             _run_setup(api_url, new_token)
             return
         except ImportError:
-            _info("Playwright not installed — falling back to manual setup.")
+            _info("Playwright não instalado — voltando para configuração manual.")
         except PermissionError as e:
             _err(str(e))
             raise typer.Exit(1)
         except (TimeoutError, ValueError) as e:
-            _err(f"Auto-capture failed: {e}")
-            _info("Falling back to manual setup.")
+            _err(f"Captura automática falhou: {e}")
+            _info("Voltando para configuração manual.")
         console.print()
-        _section("Credentials")
+        _section("Credenciais")
         api_url, token = _prompt_credentials()
         _run_setup(api_url, token)
         return
@@ -336,7 +336,7 @@ def check(ctx: typer.Context) -> None:
         console.print()
         raise typer.Exit(1)
 
-    _ok(f"Setup atual ainda funciona.  [dim]({len(activities)} activities reachable)[/dim]")
+    _ok(f"Configuração atual ainda funciona.  [dim]({len(activities)} atividades acessíveis)[/dim]")
     console.print()
 
     reconfigure = questionary.confirm(
@@ -354,19 +354,19 @@ def check(ctx: typer.Context) -> None:
 def _prompt_credentials() -> tuple[str, str]:
     """Prompt user to manually paste API URL and token. Returns (api_url, token)."""
     api_url = questionary.text(
-        "Full API URL  (Network tab → request URL):",
+        "URL completa da API  (aba Rede → URL da requisição):",
         style=STYLE,
     ).ask()
     if not api_url:
-        _err("Cancelled.")
+        _err("Cancelado.")
         raise typer.Exit(0)
 
     token = questionary.password(
-        "Authorization header value  (e.g. 'Bearer eyJ...'):",
+        "Valor do cabeçalho Authorization  (ex: 'Bearer eyJ...'):",
         style=STYLE,
     ).ask()
     if not token:
-        _err("Cancelled.")
+        _err("Cancelado.")
         raise typer.Exit(0)
 
     return api_url, token
@@ -378,13 +378,13 @@ def _run_setup(api_url: str, token: str) -> None:
     if not token.isascii():
         bad = [c for c in token if not c.isascii()]
         _err(
-            f"Token contains non-ASCII characters {bad}.\n"
-            "     In devtools, right-click the Authorization value → Copy Value."
+            f"Token contém caracteres não-ASCII {bad}.\n"
+            "     No devtools, clique com o botão direito no valor de Authorization → Copiar Valor."
         )
         raise typer.Exit(1)
 
     console.print()
-    console.print("  Validating credentials...")
+    console.print("  Validando credenciais...")
     try:
         client = AdaloveClient(api_url=api_url, token=token)
         activities = client.fetch_activities()
@@ -395,14 +395,14 @@ def _run_setup(api_url: str, token: str) -> None:
         _err(str(e))
         raise typer.Exit(1)
 
-    _ok(f"{len(activities)} activities fetched.")
+    _ok(f"{len(activities)} atividades encontradas.")
 
     teachers = get_unique_teachers(activities)
     if not teachers:
-        _err("No teachers found in the response. Check your API URL.")
+        _err("Nenhum professor encontrado na resposta. Verifique a URL da API.")
         raise typer.Exit(1)
 
-    _section("Teacher Mapping")
+    _section("Mapeamento de Professores")
 
     teacher_subjects: dict[str, str] = {}
     for teacher in teachers:
@@ -412,7 +412,7 @@ def _run_setup(api_url: str, token: str) -> None:
             style=STYLE,
         ).ask()
         if subject is None:
-            _err("Cancelled.")
+            _err("Cancelado.")
             raise typer.Exit(0)
         teacher_subjects[teacher] = subject
 
@@ -422,34 +422,34 @@ def _run_setup(api_url: str, token: str) -> None:
         "teacher_subjects": teacher_subjects,
     })
 
-    _section("Done")
-    _ok("Config saved to config.json.")
-    _info("Run [bold]adalove[/bold] and choose Fetch to generate your activity files.")
+    _section("Concluído")
+    _ok("Configuração salva em config.json.")
+    _info("Execute [bold]adalove[/bold] e escolha Buscar para gerar seus arquivos de atividades.")
     console.print()
 
 
 @app.command()
 def setup() -> None:
-    """Configure API credentials and assign teachers to subjects."""
-    _section("Credentials")
+    """Configura credenciais da API e mapeia professores às disciplinas."""
+    _section("Credenciais")
 
     api_url: str | None = None
     token: str | None = None
 
-    _info("Attempting to auto-capture credentials from browser...")
+    _info("Tentando capturar credenciais automaticamente pelo navegador...")
     try:
         from adalove.browser.capture import capture_credentials
         api_url, token = capture_credentials()
-        _ok("Credentials captured automatically.")
+        _ok("Credenciais capturadas automaticamente.")
     except ImportError:
-        _info("Playwright not installed — falling back to manual input.")
-        _info("Install with: [bold]pip install playwright && playwright install chromium[/bold]")
+        _info("Playwright não instalado — usando entrada manual.")
+        _info("Instale com: [bold]pip install playwright && playwright install chromium[/bold]")
     except PermissionError as e:
         _err(str(e))
         raise typer.Exit(1)
     except (TimeoutError, ValueError) as e:
-        _err(f"Auto-capture failed: {e}")
-        _info("Falling back to manual input.")
+        _err(f"Captura automática falhou: {e}")
+        _info("Usando entrada manual.")
 
     if api_url is None or token is None:
         console.print()
@@ -462,8 +462,8 @@ def setup() -> None:
 
 @app.command()
 def fetch() -> None:
-    """Interactively filter activities and write output markdown files."""
-    _section("Loading")
+    """Filtra atividades interativamente e gera os arquivos markdown de saída."""
+    _section("Carregando")
 
     try:
         config = load_config()
@@ -473,12 +473,12 @@ def fetch() -> None:
 
     teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
 
-    console.print("  Fetching activities...")
+    console.print("  Buscando atividades...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
         activities = client.fetch_activities()
     except KeyError as e:
-        _err(f"config.json is missing key {e}. Run setup again.")
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         raise typer.Exit(1)
     except PermissionError as e:
         _err(str(e))
@@ -487,11 +487,11 @@ def fetch() -> None:
         _err(str(e))
         raise typer.Exit(1)
 
-    _ok(f"{len(activities)} activities loaded.")
+    _ok(f"{len(activities)} atividades carregadas.")
 
-    _section("Filters")
+    _section("Filtros")
 
-    _window("Weeks", "[dim]Space  toggle    Enter  confirm[/dim]")
+    _window("Semanas", "[dim]Espaço  selecionar    Enter  confirmar[/dim]")
     console.print()
 
     week_choices = [
@@ -500,34 +500,34 @@ def fetch() -> None:
     ]
     while True:
         selected_week_nums = questionary.checkbox(
-            "Select weeks:",
+            "Selecione as semanas:",
             choices=week_choices,
             style=STYLE,
         ).ask()
         if selected_week_nums is None:
-            _err("Cancelled.")
+            _err("Cancelado.")
             raise typer.Exit(0)
         if selected_week_nums:
             break
-        console.print("  [yellow]Select at least one week.[/yellow]")
+        console.print("  [yellow]Selecione ao menos uma semana.[/yellow]")
 
     console.print()
-    _window("Subjects", "[dim]Space  toggle    Enter  confirm[/dim]")
+    _window("Disciplinas", "[dim]Espaço  selecionar    Enter  confirmar[/dim]")
     console.print()
 
     subject_choices = [s for s in SUBJECTS if s != "Não presente no módulo"]
     while True:
         selected_subjects = questionary.checkbox(
-            "Select subjects:",
+            "Selecione as disciplinas:",
             choices=subject_choices,
             style=STYLE,
         ).ask()
         if selected_subjects is None:
-            _err("Cancelled.")
+            _err("Cancelado.")
             raise typer.Exit(0)
         if selected_subjects:
             break
-        console.print("  [yellow]Select at least one subject.[/yellow]")
+        console.print("  [yellow]Selecione ao menos uma disciplina.[/yellow]")
 
     filtered = filter_activities(
         activities=activities,
@@ -536,10 +536,10 @@ def fetch() -> None:
         teacher_subjects=teacher_subjects,
     )
 
-    _section("Results")
+    _section("Resultados")
 
     if not filtered:
-        _info("No activities match the selected filters.")
+        _info("Nenhuma atividade corresponde aos filtros selecionados.")
         console.print()
         raise typer.Exit(0)
 
@@ -548,13 +548,13 @@ def fetch() -> None:
     already_count = len(filtered) - len(new_activities)
 
     _info(
-        f"{len(filtered)} matched  •  "
-        f"[green]{len(new_activities)} new[/green]  •  "
-        f"[dim]{already_count} already written[/dim]"
+        f"{len(filtered)} encontradas  •  "
+        f"[green]{len(new_activities)} novas[/green]  •  "
+        f"[dim]{already_count} já escritas[/dim]"
     )
 
     if not new_activities:
-        _ok("Nothing new to add — files are up to date.")
+        _ok("Nada novo para adicionar — arquivos estão atualizados.")
         console.print()
         raise typer.Exit(0)
 

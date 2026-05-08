@@ -1,8 +1,9 @@
 import requests
 from adalove.models.activity import Activity
+from adalove.models.student_status import StudentStatus
 
 SESSION_EXPIRED_MESSAGE = (
-    "Session expired. Run 'adalove setup' to update your token."
+    "Sessão expirada. Execute 'adalove setup' para atualizar seu token."
 )
 
 
@@ -24,8 +25,8 @@ class AdaloveClient:
             response = self._session.get(self._api_url, timeout=30)
         except UnicodeEncodeError as e:
             raise ValueError(
-                f"Token or URL contains non-ASCII characters ({e}). "
-                "Re-run 'adalove setup' and copy the raw token from devtools."
+                f"Token ou URL contém caracteres não-ASCII ({e}). "
+                "Execute 'adalove setup' novamente e copie o token bruto do devtools."
             ) from e
         except requests.RequestException as e:
             raise ConnectionError(str(e)) from e
@@ -37,3 +38,22 @@ class AdaloveClient:
 
         data = response.json()
         return [Activity.from_api(a) for a in data.get("activities", [])]
+
+    def fetch_student_status(self) -> StudentStatus:
+        try:
+            response = self._session.get(self._api_url, timeout=30)
+        except UnicodeEncodeError as e:
+            raise ValueError(
+                f"Token ou URL contém caracteres não-ASCII ({e}). "
+                "Execute 'adalove setup' novamente e copie o token bruto do devtools."
+            ) from e
+        except requests.RequestException as e:
+            raise ConnectionError(str(e)) from e
+
+        if response.status_code in (401, 403):
+            raise PermissionError(SESSION_EXPIRED_MESSAGE)
+
+        response.raise_for_status()
+
+        data = response.json()
+        return StudentStatus.from_api(data.get("studentStatus") or {})

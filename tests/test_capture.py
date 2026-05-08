@@ -23,12 +23,12 @@ def test_best_response_single_entry():
 
 
 def test_best_response_empty_raises_timeout():
-    with pytest.raises(TimeoutError, match="No API request"):
+    with pytest.raises(TimeoutError, match="Nenhuma requisição"):
         _best_response([])
 
 
 def test_best_response_empty_auth_raises_value_error():
-    with pytest.raises(ValueError, match="Authorization header"):
+    with pytest.raises(ValueError, match="cabeçalho de autorização"):
         _best_response([("https://api/sections/aaa/userdata", "", 100)])
 
 
