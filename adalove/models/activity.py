@@ -43,6 +43,9 @@ class Activity:
     study_type: str
     status: int
     tags: list[str]
+    type: int = 0
+    grade_weight: int = 0
+    grade_result: float = -1.0
 
     @property
     def is_ponderada(self) -> bool:
@@ -51,6 +54,7 @@ class Activity:
     @classmethod
     def from_api(cls, data: dict) -> "Activity":
         folder_caption = data.get("folderCaption") or ""
+        gr = data.get("gradeResult")
         return cls(
             uuid=data.get("studentActivityUuid") or "",
             caption=data.get("caption") or "",
@@ -62,4 +66,7 @@ class Activity:
             study_type=data.get("study_type") or "",
             status=data.get("status") or 0,
             tags=data.get("tags") or [],
+            type=data.get("type") or 0,
+            grade_weight=data.get("gradeWeight") or 0,
+            grade_result=float(gr) if gr is not None else -1.0,
         )

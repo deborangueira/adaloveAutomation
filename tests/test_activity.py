@@ -1,3 +1,5 @@
+import pytest
+
 from adalove.models.activity import Activity, strip_html
 
 
@@ -104,3 +106,40 @@ def test_is_ponderada_case_insensitive():
     }
     activity = Activity.from_api(raw)
     assert activity.is_ponderada is True
+
+
+def test_activity_from_api_maps_grade_fields():
+    raw = {
+        "studentActivityUuid": "abc",
+        "caption": "Desafio",
+        "description": "",
+        "basicActivityURL": "",
+        "professorName": "Prof X",
+        "folderCaption": "Semana 03",
+        "study_type": "class",
+        "status": 1,
+        "type": 11,
+        "gradeWeight": 4,
+        "gradeResult": "8.5",
+    }
+    activity = Activity.from_api(raw)
+    assert activity.type == 11
+    assert activity.grade_weight == 4
+    assert activity.grade_result == pytest.approx(8.5)
+
+
+def test_activity_from_api_grade_result_missing_defaults_to_minus_one():
+    raw = {
+        "studentActivityUuid": "abc",
+        "caption": "Leitura",
+        "description": "",
+        "basicActivityURL": "",
+        "professorName": "Prof X",
+        "folderCaption": "Semana 01",
+        "study_type": "class",
+        "status": 1,
+    }
+    activity = Activity.from_api(raw)
+    assert activity.type == 0
+    assert activity.grade_weight == 0
+    assert activity.grade_result == pytest.approx(-1.0)
