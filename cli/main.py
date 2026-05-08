@@ -17,9 +17,9 @@ from adalove.api.client import AdaloveClient
 from adalove.config.settings import load_config, save_config
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import filter_activities, get_unique_teachers, get_unique_weeks
-from adalove.output.links import append_links_md, write_links_md
-from adalove.output.markdown import append_activities_md, write_activities_md
-from adalove.output.state import load_written_uuids, save_written_uuids
+from adalove.writers.links import append_links_md, write_links_md
+from adalove.writers.markdown import append_activities_md, write_activities_md
+from adalove.writers.state import load_written_uuids, save_written_uuids
 
 app = typer.Typer(
     help="Fetch and filter Adalove activities.",
@@ -108,7 +108,8 @@ def _info(msg: str) -> None:
 def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
     """Return a list of `height` strings of length `width` forming a pie chart.
 
-    fraction — the "present" share (0.0–1.0).  The absent slice sits at 12 o'clock.
+    fraction — the "present" share (0.0–1.0).  The absent slice starts at 12 o'clock
+    and grows clockwise so the right side moves while the left stays static.
     Characters are ~2× taller than wide; horizontal distances are halved to compensate.
     """
     absent = 1.0 - fraction
@@ -126,8 +127,7 @@ def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
             dy = row - cy
             if math.sqrt(dx * dx + dy * dy) <= r:
                 angle = math.atan2(dx, -dy) % (2 * math.pi)  # 0 = top, clockwise
-                half = absent_angle / 2
-                if angle <= half or angle >= 2 * math.pi - half:
+                if angle < absent_angle:
                     chars.append(" ")   # absent sector
                 else:
                     chars.append("█")  # present sector
@@ -181,14 +181,32 @@ def _build_grid(data: dict) -> Table:
 
 def dashboard() -> None:
     """Render the full-terminal ASCII dashboard and wait for the user to go back."""
-    data = dict(MOCK)
+    try:
+        config = load_config()
+    except FileNotFoundError:
+        _err("No config.json found. Run Setup first.")
+        return
+
+    console.print("  Conectando...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        student_status = client.fetch_student_status()
+    except KeyError as e:
+        _err(f"config.json is missing key {e}. Run Setup again.")
+        return
+    except PermissionError as e:
+        _err(str(e))
+        return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
     w, h = console.size
     layout_h = max(h - 3, 12)
     pane_w = max(w // 2 - 4, 1)
-    pane_h = max(layout_h - 2, 1)  # full panel inner height
+    pane_h = max(layout_h - 2, 1)
 
-    presenca_pct = f"{round(float(data['presenca']) * 100)}%"
-    pie_lines = _draw_pie(pane_w, pane_h, float(data["presenca"]))
+    pie_lines = _draw_pie(pane_w, pane_h, student_status.pie_fraction)
 
     left_panel = Panel(
         Align(
@@ -196,12 +214,12 @@ def dashboard() -> None:
             align="center",
             vertical="middle",
         ),
-        title=f"[bold white]Presença  {presenca_pct}[/bold white]",
+        title=f"[bold white]Presença  {student_status.absence_remaining_label}[/bold white]",
         border_style="cyan",
         height=layout_h,
     )
     right_panel = Panel(
-        Align(_build_grid(data), vertical="middle"),
+        Align(_build_grid(dict(MOCK)), vertical="middle"),
         border_style="cyan",
         height=layout_h,
     )
@@ -315,27 +333,8 @@ def check(ctx: typer.Context) -> None:
 
 # ── setup ─────────────────────────────────────────────────────────────────────
 
-@app.command()
-def setup() -> None:
-    """Configure API credentials and assign teachers to subjects."""
-    _section("Credentials")
-
-    api_url = questionary.text(
-        "Full API URL  (Network tab → request URL):",
-        style=STYLE,
-    ).ask()
-    if not api_url:
-        _err("Cancelled.")
-        raise typer.Exit(0)
-
-    token = questionary.password(
-        "Authorization header value  (e.g. 'Bearer eyJ...'):",
-        style=STYLE,
-    ).ask()
-    if not token:
-        _err("Cancelled.")
-        raise typer.Exit(0)
-
+def _run_setup(api_url: str, token: str) -> None:
+    """Validate credentials and configure teacher mapping. Saves config on success."""
     token = token.strip()
     if not token.isascii():
         bad = [c for c in token if not c.isascii()]
@@ -388,6 +387,50 @@ def setup() -> None:
     _ok("Config saved to config.json.")
     _info("Run [bold]adalove[/bold] and choose Fetch to generate your activity files.")
     console.print()
+
+
+@app.command()
+def setup() -> None:
+    """Configure API credentials and assign teachers to subjects."""
+    _section("Credentials")
+
+    api_url: str | None = None
+    token: str | None = None
+
+    _info("Attempting to auto-capture credentials from browser...")
+    try:
+        from adalove.browser.capture import capture_credentials
+        api_url, token = capture_credentials()
+        _ok("Credentials captured automatically.")
+    except ImportError:
+        _info("Playwright not installed — falling back to manual input.")
+        _info("Install with: [bold]pip install playwright && playwright install chromium[/bold]")
+    except PermissionError as e:
+        _err(str(e))
+        raise typer.Exit(1)
+    except (TimeoutError, ValueError) as e:
+        _err(f"Auto-capture failed: {e}")
+        _info("Falling back to manual input.")
+
+    if api_url is None or token is None:
+        console.print()
+        api_url = questionary.text(
+            "Full API URL  (Network tab → request URL):",
+            style=STYLE,
+        ).ask()
+        if not api_url:
+            _err("Cancelled.")
+            raise typer.Exit(0)
+
+        token = questionary.password(
+            "Authorization header value  (e.g. 'Bearer eyJ...'):",
+            style=STYLE,
+        ).ask()
+        if not token:
+            _err("Cancelled.")
+            raise typer.Exit(0)
+
+    _run_setup(api_url, token)
 
 
 # ── fetch ─────────────────────────────────────────────────────────────────────
