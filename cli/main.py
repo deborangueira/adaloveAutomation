@@ -327,7 +327,9 @@ def check(ctx: typer.Context) -> None:
             _err(f"Auto-capture failed: {e}")
             _info("Falling back to manual setup.")
         console.print()
-        setup()
+        _section("Credentials")
+        api_url, token = _prompt_credentials()
+        _run_setup(api_url, token)
         return
     except (ConnectionError, ValueError) as e:
         _err(str(e))
@@ -348,6 +350,27 @@ def check(ctx: typer.Context) -> None:
 
 
 # ── setup ─────────────────────────────────────────────────────────────────────
+
+def _prompt_credentials() -> tuple[str, str]:
+    """Prompt user to manually paste API URL and token. Returns (api_url, token)."""
+    api_url = questionary.text(
+        "Full API URL  (Network tab → request URL):",
+        style=STYLE,
+    ).ask()
+    if not api_url:
+        _err("Cancelled.")
+        raise typer.Exit(0)
+
+    token = questionary.password(
+        "Authorization header value  (e.g. 'Bearer eyJ...'):",
+        style=STYLE,
+    ).ask()
+    if not token:
+        _err("Cancelled.")
+        raise typer.Exit(0)
+
+    return api_url, token
+
 
 def _run_setup(api_url: str, token: str) -> None:
     """Validate credentials and configure teacher mapping. Saves config on success."""
@@ -430,21 +453,7 @@ def setup() -> None:
 
     if api_url is None or token is None:
         console.print()
-        api_url = questionary.text(
-            "Full API URL  (Network tab → request URL):",
-            style=STYLE,
-        ).ask()
-        if not api_url:
-            _err("Cancelled.")
-            raise typer.Exit(0)
-
-        token = questionary.password(
-            "Authorization header value  (e.g. 'Bearer eyJ...'):",
-            style=STYLE,
-        ).ask()
-        if not token:
-            _err("Cancelled.")
-            raise typer.Exit(0)
+        api_url, token = _prompt_credentials()
 
     _run_setup(api_url, token)
 

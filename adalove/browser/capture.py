@@ -34,7 +34,7 @@ def capture_credentials() -> tuple[str, str]:
     Raises:
         ImportError: playwright package not installed.
         PermissionError: browser redirected away from Adalove (user not logged in).
-        TimeoutError: no matching request captured within 8 seconds.
+        TimeoutError: no matching request captured, or any browser/network error.
         ValueError: matching request had no Authorization header.
     """
     if not _PLAYWRIGHT_AVAILABLE:
@@ -45,40 +45,45 @@ def capture_credentials() -> tuple[str, str]:
 
     captured: list[tuple[str, str, int]] = []
 
-    with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(_PROFILE_DIR),
-            headless=False,
-        )
+    try:
+        with sync_playwright() as p:
+            context = p.chromium.launch_persistent_context(
+                str(_PROFILE_DIR),
+                headless=False,
+            )
 
-        def _on_response(response) -> None:
-            if _API_HOST not in response.url or _API_PATH not in response.url:
-                return
+            def _on_response(response) -> None:
+                if _API_HOST not in response.url or _API_PATH not in response.url:
+                    return
+                try:
+                    auth = response.request.headers.get("authorization", "")
+                    body_size = len(response.body())
+                    if auth:
+                        captured.append((response.url, auth, body_size))
+                except Exception:  # noqa: BLE001
+                    pass
+
+            context.on("response", _on_response)
+            page = context.new_page()
             try:
-                auth = response.request.headers.get("authorization", "")
-                body_size = len(response.body())
-                if auth:
-                    captured.append((response.url, auth, body_size))
-            except Exception:  # noqa: BLE001
-                pass
+                page.goto(_ADALOVE_URL, wait_until="domcontentloaded", timeout=15_000)
 
-        context.on("response", _on_response)
-        page = context.new_page()
-        try:
-            page.goto(_ADALOVE_URL, wait_until="domcontentloaded", timeout=15_000)
+                if not page.url.startswith(_ADALOVE_URL):
+                    raise PermissionError(
+                        "Not logged in — open Adalove in your browser, log in, then re-run setup."
+                    )
 
-            if not page.url.startswith(_ADALOVE_URL):
-                raise PermissionError(
-                    "Not logged in — open Adalove in your browser, log in, then re-run setup."
-                )
+                try:
+                    page.click("text=Atividades", timeout=5_000)
+                except Exception:  # noqa: BLE001
+                    pass
 
-            try:
-                page.click("text=Atividades", timeout=5_000)
-            except Exception:  # noqa: BLE001
-                pass
-
-            page.wait_for_timeout(_TIMEOUT_MS)
-        finally:
-            context.close()
+                page.wait_for_timeout(_TIMEOUT_MS)
+            finally:
+                context.close()
+    except PermissionError:
+        raise
+    except Exception as exc:
+        raise TimeoutError(f"Browser capture failed: {exc}") from exc
 
     return _best_response(captured)
