@@ -309,7 +309,23 @@ def check(ctx: typer.Context) -> None:
     except PermissionError:
         _err("Token expired or invalid.")
         console.print()
-        _info("Redirecting to Setup...")
+        _info("Attempting to auto-capture new credentials...")
+        console.print()
+        try:
+            from adalove.browser.capture import capture_credentials
+            api_url, new_token = capture_credentials()
+            _ok("Credentials captured. Reconfiguring...")
+            console.print()
+            _run_setup(api_url, new_token)
+            return
+        except ImportError:
+            _info("Playwright not installed — falling back to manual setup.")
+        except PermissionError as e:
+            _err(str(e))
+            raise typer.Exit(1)
+        except (TimeoutError, ValueError) as e:
+            _err(f"Auto-capture failed: {e}")
+            _info("Falling back to manual setup.")
         console.print()
         setup()
         return
