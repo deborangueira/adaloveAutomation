@@ -64,20 +64,21 @@ def capture_credentials() -> tuple[str, str]:
 
         context.on("response", _on_response)
         page = context.new_page()
-        page.goto(_ADALOVE_URL, wait_until="domcontentloaded", timeout=15_000)
-
-        if not page.url.startswith(_ADALOVE_URL):
-            context.close()
-            raise PermissionError(
-                "Not logged in — open Adalove in your browser, log in, then re-run setup."
-            )
-
         try:
-            page.click("text=Atividades", timeout=5_000)
-        except Exception:  # noqa: BLE001
-            pass
+            page.goto(_ADALOVE_URL, wait_until="domcontentloaded", timeout=15_000)
 
-        page.wait_for_timeout(_TIMEOUT_MS)
-        context.close()
+            if not page.url.startswith(_ADALOVE_URL):
+                raise PermissionError(
+                    "Not logged in — open Adalove in your browser, log in, then re-run setup."
+                )
+
+            try:
+                page.click("text=Atividades", timeout=5_000)
+            except Exception:  # noqa: BLE001
+                pass
+
+            page.wait_for_timeout(_TIMEOUT_MS)
+        finally:
+            context.close()
 
     return _best_response(captured)

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from adalove.browser.capture import _best_response
 
@@ -28,9 +30,6 @@ def test_best_response_empty_raises_timeout():
 def test_best_response_empty_auth_raises_value_error():
     with pytest.raises(ValueError, match="Authorization header"):
         _best_response([("https://api/sections/aaa/userdata", "", 100)])
-
-
-from unittest.mock import patch
 
 
 def test_capture_credentials_raises_import_error_when_unavailable():
