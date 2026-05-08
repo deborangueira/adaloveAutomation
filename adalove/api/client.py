@@ -57,3 +57,25 @@ class AdaloveClient:
 
         data = response.json()
         return StudentStatus.from_api(data.get("studentStatus") or {})
+
+    def fetch_dashboard_data(self) -> tuple[StudentStatus, list[Activity], str]:
+        try:
+            response = self._session.get(self._api_url, timeout=30)
+        except UnicodeEncodeError as e:
+            raise ValueError(
+                f"Token ou URL contém caracteres não-ASCII ({e}). "
+                "Execute 'adalove setup' novamente e copie o token bruto do devtools."
+            ) from e
+        except requests.RequestException as e:
+            raise ConnectionError(str(e)) from e
+
+        if response.status_code in (401, 403):
+            raise PermissionError(SESSION_EXPIRED_MESSAGE)
+
+        response.raise_for_status()
+
+        data = response.json()
+        student_status = StudentStatus.from_api(data.get("studentStatus") or {})
+        activities = [Activity.from_api(a) for a in data.get("activities", [])]
+        section_date = (data.get("section") or {}).get("sectionDate") or ""
+        return student_status, activities, section_date
