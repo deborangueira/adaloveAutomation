@@ -51,7 +51,10 @@ class DashboardMetrics:
 def _compute_week(section_date_str: str) -> int:
     if not section_date_str:
         return 1
-    section = date.fromisoformat(section_date_str)
+    try:
+        section = date.fromisoformat(section_date_str)
+    except ValueError:
+        return 1
     return (date.today() - section).days // 7 + 1
 
 
