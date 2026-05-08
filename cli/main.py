@@ -1,5 +1,16 @@
+import sys
 import math
 from pathlib import Path
+
+# When the venv python binary is a symlink to the system interpreter, venv
+# detection can fail and site-packages won't include the venv's packages.
+# Add them explicitly so optional deps like playwright are always found.
+_venv_lib = Path(__file__).resolve().parent.parent / ".venv" / "lib"
+if _venv_lib.is_dir():
+    for _d in _venv_lib.iterdir():
+        _sp = _d / "site-packages"
+        if _sp.is_dir() and str(_sp) not in sys.path:
+            sys.path.insert(1, str(_sp))
 
 import questionary
 import typer
@@ -15,6 +26,7 @@ from rich.text import Text
 
 from adalove.api.client import AdaloveClient
 from adalove.config.settings import load_config, save_config
+from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import filter_activities, get_unique_teachers, get_unique_weeks
 from adalove.writers.links import append_links_md, write_links_md
@@ -28,17 +40,6 @@ app = typer.Typer(
 )
 console = Console()
 err_console = Console(stderr=True)
-
-MOCK: dict[str, float | int] = {
-    "presenca": 0.92,
-    "acumulada": 0.0,
-    "ate_o_momento": 0.0,
-    "nota_necessaria": 0.0,
-    "semana_atual": 3,
-    "ponderadas_semana": 5,
-    "auto_estudos_feitos": 0.0,
-    "auto_estudos_a_fazer": 0.0,
-}
 
 BANNER = """\
  █████╗ ██████╗  █████╗ ██╗      ██████╗ ██╗   ██╗███████╗
@@ -137,8 +138,7 @@ def _draw_pie(width: int, height: int, fraction: float) -> list[str]:
     return lines
 
 
-def _build_grid(data: dict) -> Table:
-    """Build the right-pane data grid from a data dict."""
+def _build_grid(metrics: DashboardMetrics) -> Table:
     def cell(title: str, value: str) -> str:
         return f"[dim]{title}[/dim]\n[bold white]{value}[/bold white]"
 
@@ -152,29 +152,25 @@ def _build_grid(data: dict) -> Table:
     tbl.add_column("sep", width=1, justify="center")
     tbl.add_column("right", ratio=5, justify="center")
 
-    # Row 1 — two columns
     tbl.add_row(
-        cell("Acumulada", str(data["acumulada"])),
+        cell("Acumulada", f"{metrics.acumulada:.2f}"),
         "│",
-        cell("Até o momento", str(data["ate_o_momento"])),
+        cell("Até o momento", f"{metrics.ate_o_momento:.2f}"),
     )
-    # Row 2 — full width (right cells left empty)
     tbl.add_row(
-        cell("Nota necessária da prova", str(data["nota_necessaria"])),
+        cell("Nota necessária da prova", f"{metrics.nota_necessaria:.2f}"),
         "",
         "",
     )
-    # Row 3 — two columns
     tbl.add_row(
-        cell("Semana atual", str(data["semana_atual"])),
+        cell("Semana atual", str(metrics.semana_atual)),
         "│",
-        cell("ponderadas dessa semana", str(data["ponderadas_semana"])),
+        cell("ponderadas dessa semana", str(metrics.ponderadas_semana)),
     )
-    # Row 4 — two columns
     tbl.add_row(
-        cell("Auto estudos feitos", str(data["auto_estudos_feitos"])),
+        cell("Auto estudos feitos", str(metrics.auto_estudos_feitos)),
         "│",
-        cell("Auto estudos a fazer", str(data["auto_estudos_a_fazer"])),
+        cell("Auto estudos a fazer", str(metrics.auto_estudos_a_fazer)),
     )
     return tbl
 
@@ -190,7 +186,7 @@ def dashboard() -> None:
     console.print("  Conectando...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        student_status = client.fetch_student_status()
+        student_status, activities, section_date = client.fetch_dashboard_data()
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o Setup novamente.")
         return
@@ -200,6 +196,8 @@ def dashboard() -> None:
     except (ConnectionError, ValueError) as e:
         _err(str(e))
         return
+
+    metrics = DashboardMetrics.from_api(student_status, activities, section_date)
 
     w, h = console.size
     layout_h = max(h - 3, 12)
@@ -219,7 +217,7 @@ def dashboard() -> None:
         height=layout_h,
     )
     right_panel = Panel(
-        Align(_build_grid(dict(MOCK)), vertical="middle"),
+        Align(_build_grid(metrics), vertical="middle"),
         border_style="cyan",
         height=layout_h,
     )
@@ -405,16 +403,49 @@ def _run_setup(api_url: str, token: str) -> None:
     _section("Mapeamento de Professores")
 
     teacher_subjects: dict[str, str] = {}
-    for teacher in teachers:
-        subject = questionary.select(
-            f"{teacher}:",
-            choices=SUBJECTS,
+
+    try:
+        existing = load_config()
+        existing_map: dict[str, str] = existing.get("teacher_subjects", {})
+    except FileNotFoundError:
+        existing_map = {}
+
+    if existing_map:
+        for teacher, subject in existing_map.items():
+            _info(f"  {teacher} → {subject}")
+        console.print()
+        keep = questionary.confirm(
+            "Manter o mapeamento de professores existente?",
+            default=True,
             style=STYLE,
         ).ask()
-        if subject is None:
+        if keep is None:
             _err("Cancelado.")
             raise typer.Exit(0)
-        teacher_subjects[teacher] = subject
+        if keep:
+            teacher_subjects = existing_map
+        else:
+            for teacher in teachers:
+                subject = questionary.select(
+                    f"{teacher}:",
+                    choices=SUBJECTS,
+                    style=STYLE,
+                ).ask()
+                if subject is None:
+                    _err("Cancelado.")
+                    raise typer.Exit(0)
+                teacher_subjects[teacher] = subject
+    else:
+        for teacher in teachers:
+            subject = questionary.select(
+                f"{teacher}:",
+                choices=SUBJECTS,
+                style=STYLE,
+            ).ask()
+            if subject is None:
+                _err("Cancelado.")
+                raise typer.Exit(0)
+            teacher_subjects[teacher] = subject
 
     save_config({
         "api_url": api_url,
