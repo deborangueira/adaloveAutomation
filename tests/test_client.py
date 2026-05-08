@@ -179,6 +179,15 @@ def test_fetch_dashboard_data_raises_on_401(client):
             client.fetch_dashboard_data()
 
 
+def test_fetch_dashboard_data_raises_on_403(client):
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+
+    with patch.object(client._session, "get", return_value=mock_response):
+        with pytest.raises(PermissionError, match=SESSION_EXPIRED_MESSAGE):
+            client.fetch_dashboard_data()
+
+
 def test_fetch_dashboard_data_raises_on_network_error(client):
     with patch.object(
         client._session, "get", side_effect=_requests.RequestException("timeout")
