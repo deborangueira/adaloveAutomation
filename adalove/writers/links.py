@@ -1,10 +1,10 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from adalove.models.activity import Activity
 
-OUTPUT_DIR = Path.cwd() / "output"
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
 
 
 def _build_section(
@@ -41,9 +41,9 @@ def write_links_md(
     selected_weeks: list[int],
     selected_subjects: list[str],
 ) -> Path:
-    """Create the file from scratch (first run)."""
     OUTPUT_DIR.mkdir(exist_ok=True)
-    path = OUTPUT_DIR / "links.md"
+    stamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+    path = OUTPUT_DIR / f"links-{stamp}.md"
 
     weeks_label = ", ".join(f"Semana {w:02d}" for w in sorted(selected_weeks)) or "Todas"
     subjects_label = ", ".join(sorted(selected_subjects)) or "Todas"
@@ -56,25 +56,4 @@ def write_links_md(
         *_build_section(activities, teacher_subjects),
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
-    return path
-
-
-def append_links_md(
-    new_activities: list[Activity],
-    teacher_subjects: dict[str, str],
-) -> Path:
-    """Append new links to an existing file under a dated separator."""
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    path = OUTPUT_DIR / "links.md"
-    today = date.today().isoformat()
-
-    lines: list[str] = [
-        "",
-        "---",
-        f"> Adicionado em: {today}",
-        "",
-        *_build_section(new_activities, teacher_subjects),
-    ]
-    with path.open("a", encoding="utf-8") as f:
-        f.write("\n".join(lines))
     return path

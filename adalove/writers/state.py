@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 
+_OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
+
 
 def _path() -> Path:
-    return Path.cwd() / "output" / ".state.json"
+    return _OUTPUT_DIR / ".state.json"
 
 
 def load_written_uuids() -> set[str]:

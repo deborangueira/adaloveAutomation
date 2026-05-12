@@ -1,11 +1,11 @@
 import pytest
 from adalove.models.activity import Activity
-from adalove.output.links import write_links_md
+from adalove.writers.links import write_links_md
 
 
 @pytest.fixture
 def tmp_output(tmp_path, monkeypatch):
-    monkeypatch.setattr("adalove.output.links.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("adalove.writers.links.OUTPUT_DIR", tmp_path)
     return tmp_path
 
 

@@ -29,9 +29,8 @@ from adalove.config.settings import load_config, save_config
 from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import filter_activities, get_unique_teachers, get_unique_weeks
-from adalove.writers.links import append_links_md, write_links_md
-from adalove.writers.markdown import append_activities_md, write_activities_md
-from adalove.writers.state import load_written_uuids, save_written_uuids
+from adalove.writers.links import write_links_md
+from adalove.writers.markdown import write_activities_md
 
 app = typer.Typer(
     help="Fetch and filter Adalove activities.",
@@ -246,34 +245,38 @@ def main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
 
-    _header("Gerenciador de Atividades")
+    while True:
+        _header("Gerenciador de Atividades")
 
-    _window(
-        "Menu Principal",
-        "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
-    )
-    console.print()
+        _window(
+            "Menu Principal",
+            "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
+        )
+        console.print()
 
-    choice = questionary.select(
-        "Escolha uma opção:",
-        choices=[
-            questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
-            questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
-            questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
-            questionary.Choice("  Sair",                                                              value="exit"),
-        ],
-        style=STYLE,
-    ).ask()
+        choice = questionary.select(
+            "Escolha uma opção:",
+            choices=[
+                questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
+                questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
+                questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
+                questionary.Choice("  Sair",                                                              value="exit"),
+            ],
+            style=STYLE,
+        ).ask()
 
-    if choice is None or choice == "exit":
-        raise typer.Exit(0)
+        if choice is None or choice == "exit":
+            raise typer.Exit(0)
 
-    if choice == "setup":
-        check(ctx)
-    elif choice == "fetch":
-        ctx.invoke(fetch)
-    elif choice == "dashboard":
-        dashboard()
+        try:
+            if choice == "setup":
+                check(ctx)
+            elif choice == "fetch":
+                ctx.invoke(fetch)
+            elif choice == "dashboard":
+                dashboard()
+        except typer.Exit:
+            pass
 
 
 # ── check ─────────────────────────────────────────────────────────────────────
@@ -574,39 +577,17 @@ def fetch() -> None:
         console.print()
         raise typer.Exit(0)
 
-    written_uuids = load_written_uuids()
-    new_activities = [a for a in filtered if a.uuid not in written_uuids]
-    already_count = len(filtered) - len(new_activities)
+    _info(f"{len(filtered)} atividades encontradas.")
 
-    _info(
-        f"{len(filtered)} encontradas  •  "
-        f"[green]{len(new_activities)} novas[/green]  •  "
-        f"[dim]{already_count} já escritas[/dim]"
+    activities_path = write_activities_md(
+        filtered, teacher_subjects, selected_week_nums, selected_subjects
+    )
+    links_path = write_links_md(
+        filtered, teacher_subjects, selected_week_nums, selected_subjects
     )
 
-    if not new_activities:
-        _ok("Nada novo para adicionar — arquivos estão atualizados.")
-        console.print()
-        raise typer.Exit(0)
-
-    files_exist = (Path.cwd() / "output" / "activities.md").exists()
-
-    if files_exist:
-        activities_path = append_activities_md(new_activities, teacher_subjects)
-        links_path = append_links_md(new_activities, teacher_subjects)
-    else:
-        activities_path = write_activities_md(
-            new_activities, teacher_subjects, selected_week_nums, selected_subjects
-        )
-        links_path = write_links_md(
-            new_activities, teacher_subjects, selected_week_nums, selected_subjects
-        )
-
-    updated_uuids = written_uuids | {a.uuid for a in new_activities}
-    save_written_uuids(updated_uuids)
-
-    _ok(f"[bold]{activities_path}[/bold]  [dim](+{len(new_activities)})[/dim]")
-    _ok(f"[bold]{links_path}[/bold]  [dim](+{len([a for a in new_activities if a.url])} links)[/dim]")
+    _ok(f"[bold]{activities_path}[/bold]  [dim]({len(filtered)} atividades)[/dim]")
+    _ok(f"[bold]{links_path}[/bold]  [dim]({len([a for a in filtered if a.url])} links)[/dim]")
     console.print()
 
 

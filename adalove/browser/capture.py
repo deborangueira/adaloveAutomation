@@ -12,7 +12,7 @@ _ADALOVE_URL = "https://adalove.inteli.edu.br/"
 _API_HOST = "apiv2.inteli.edu.br/sections/"
 _API_PATH = "/userdata"
 _PROFILE_DIR = Path.home() / ".adalove-browser"
-_TIMEOUT_MS = 8_000
+_TIMEOUT_MS = 10_000
 
 
 def _best_response(captured: list[tuple[str, str, int]]) -> tuple[str, str]:
@@ -73,11 +73,14 @@ def capture_credentials() -> tuple[str, str]:
                         "Não autenticado — abra o Adalove no seu navegador, faça login e execute o setup novamente."
                     )
 
-                try:
-                    page.click("text=Atividades", timeout=5_000)
-                except Exception:  # noqa: BLE001
-                    pass
+                # Expand "Acadêmico" in the sidebar
+                page.locator("span.caption", has_text="Acadêmico").click(timeout=5_000)
+                page.wait_for_timeout(500)
 
+                # Click "Vida Acadêmica" to trigger the API request
+                page.get_by_text("Vida Acadêmica", exact=True).click(timeout=5_000)
+
+                # Wait for the API request to be captured
                 page.wait_for_timeout(_TIMEOUT_MS)
             finally:
                 context.close()

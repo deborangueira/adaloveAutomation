@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from adalove.models.activity import Activity
 from adalove.models.student_status import StudentStatus
@@ -30,13 +30,12 @@ class DashboardMetrics:
         artefatos = [a for a in activities if a.type == 21]
         auto_estudos = [a for a in activities if a.type == 2]
 
-        nota_ponderadas = _weighted_avg(ponderadas) * 0.35
-        nota_artefatos = _weighted_avg(artefatos) * 0.45
-        nota_necessaria = (_PASSING_GRADE - nota_ponderadas - nota_artefatos) / _PROVA_SHARE
+        acumulada = student_status.done_evaluation_result
+        nota_necessaria = (_PASSING_GRADE - acumulada * (1 - _PROVA_SHARE)) / _PROVA_SHARE
         nota_necessaria = max(0.0, min(10.0, nota_necessaria))
 
         return cls(
-            acumulada=student_status.done_evaluation_result,
+            acumulada=acumulada,
             ate_o_momento=student_status.evaluation_result,
             nota_necessaria=round(nota_necessaria, 2),
             semana_atual=semana_atual,
@@ -48,14 +47,17 @@ class DashboardMetrics:
         )
 
 
-def _compute_week(section_date_str: str) -> int:
+def _compute_week(section_date_str: str, _today: date | None = None) -> int:
     if not section_date_str:
         return 1
     try:
         section = date.fromisoformat(section_date_str)
     except ValueError:
         return 1
-    return max(1, (date.today() - section).days // 7 + 1)
+    today = _today or date.today()
+    section_monday = section - timedelta(days=section.weekday())
+    today_monday = today - timedelta(days=today.weekday())
+    return max(1, (today_monday - section_monday).days // 7 + 1)
 
 
 def _weighted_avg(activities: list[Activity]) -> float:

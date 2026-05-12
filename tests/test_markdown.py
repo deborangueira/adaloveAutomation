@@ -1,12 +1,12 @@
 import pytest
 from pathlib import Path
 from adalove.models.activity import Activity
-from adalove.output.markdown import write_activities_md
+from adalove.writers.markdown import write_activities_md
 
 
 @pytest.fixture
 def tmp_output(tmp_path, monkeypatch):
-    monkeypatch.setattr("adalove.output.markdown.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("adalove.writers.markdown.OUTPUT_DIR", tmp_path)
     return tmp_path
 
 

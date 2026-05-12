@@ -1,0 +1,30 @@
+docs/*
+output/*
+
+# Python build artifacts
+*.egg-info/
+*.egg-info/dependency_links.txt
+*.egg-info/entry_points.txt
+*.egg-info/PKG-INFO
+*.egg-info/requires.txt
+*.egg-info/SOURCES.txt
+*.egg-info/top_level.txt
+dist/
+build/
+*.egg
+
+# Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/

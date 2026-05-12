@@ -1,6 +1,6 @@
 import pytest
 from datetime import date, timedelta
-from adalove.models.dashboard_metrics import DashboardMetrics
+from adalove.models.dashboard_metrics import DashboardMetrics, _compute_week
 from adalove.models.student_status import StudentStatus
 from adalove.models.activity import Activity
 
@@ -43,30 +43,44 @@ def _section_date(days_ago: int) -> str:
 
 
 # ── semana_atual ──────────────────────────────────────────────────────────────
+# All tests use fixed dates (Mon 2026-04-20 as anchor) to avoid day-of-week
+# sensitivity. Section starts Wed Apr 22; its Monday is Apr 20.
+
+_MON = date(2026, 4, 20)  # reference Monday
+
 
 def test_semana_atual_first_day_is_week_1():
-    metrics = DashboardMetrics.from_api(_status(), [], _section_date(0))
-    assert metrics.semana_atual == 1
+    # section starts on the same Monday → week 1
+    assert _compute_week("2026-04-20", _today=_MON) == 1
 
 
-def test_semana_atual_day_6_is_still_week_1():
-    metrics = DashboardMetrics.from_api(_status(), [], _section_date(6))
-    assert metrics.semana_atual == 1
+def test_semana_atual_mid_week_same_week_is_1():
+    # today is Wed Apr 22 (same calendar week as section start Apr 22)
+    assert _compute_week("2026-04-22", _today=date(2026, 4, 22)) == 1
 
 
-def test_semana_atual_day_7_is_week_2():
-    metrics = DashboardMetrics.from_api(_status(), [], _section_date(7))
-    assert metrics.semana_atual == 2
+def test_semana_atual_sunday_same_week_is_1():
+    # today is Sun Apr 26, section started Mon Apr 20 → still week 1
+    assert _compute_week("2026-04-20", _today=date(2026, 4, 26)) == 1
 
 
-def test_semana_atual_16_days_is_week_3():
-    metrics = DashboardMetrics.from_api(_status(), [], _section_date(16))
-    assert metrics.semana_atual == 3
+def test_semana_atual_next_monday_is_week_2():
+    # today is Mon Apr 27, section started Mon Apr 20 → week 2
+    assert _compute_week("2026-04-20", _today=date(2026, 4, 27)) == 2
+
+
+def test_semana_atual_week_3():
+    # today is Mon May 4, section started Mon Apr 20 → week 3
+    assert _compute_week("2026-04-20", _today=date(2026, 5, 4)) == 3
+
+
+def test_semana_atual_week_4_with_real_section_date():
+    # real case: sectionDate=2026-04-22 (Wed), today=2026-05-11 (Mon) → week 4
+    assert _compute_week("2026-04-22", _today=date(2026, 5, 11)) == 4
 
 
 def test_semana_atual_empty_date_defaults_to_1():
-    metrics = DashboardMetrics.from_api(_status(), [], "")
-    assert metrics.semana_atual == 1
+    assert _compute_week("") == 1
 
 
 # ── ponderadas_semana ─────────────────────────────────────────────────────────
@@ -119,32 +133,20 @@ def test_auto_estudos_ignores_other_types():
 # ── nota_necessaria ───────────────────────────────────────────────────────────
 
 def test_nota_necessaria_no_grades_clamps_to_10():
-    acts = [
-        _activity(type=11, grade_weight=4, grade_result=-1.0),
-        _activity(type=21, grade_weight=3, grade_result=-1.0),
-    ]
-    metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
+    # acumulada=0.0 → need = (7.0 - 0.0*0.80) / 0.20 = 35.0 → clamped to 10
+    metrics = DashboardMetrics.from_api(_status(done=0.0), [], _section_date(0))
     assert metrics.nota_necessaria == pytest.approx(10.0)
 
 
 def test_nota_necessaria_with_perfect_grades_clamps_to_0():
-    # avg_ponderadas=10 → contributes 3.5; avg_artefatos=10 → contributes 4.5; total=8.0 > 7.0
-    acts = [
-        _activity(type=11, grade_weight=4, grade_result=10.0),
-        _activity(type=21, grade_weight=3, grade_result=10.0),
-    ]
-    metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
+    # acumulada=10.0 → need = (7.0 - 10.0*0.80) / 0.20 = -15.0 → clamped to 0
+    metrics = DashboardMetrics.from_api(_status(done=10.0), [], _section_date(0))
     assert metrics.nota_necessaria == pytest.approx(0.0)
 
 
 def test_nota_necessaria_formula():
-    # avg_ponderadas = 8.0, avg_artefatos = 6.0
-    # need = (7.0 - 8.0*0.35 - 6.0*0.45) / 0.20 = (7.0 - 2.8 - 2.7) / 0.20 = 7.5
-    acts = [
-        _activity(type=11, grade_weight=1, grade_result=8.0),
-        _activity(type=21, grade_weight=1, grade_result=6.0),
-    ]
-    metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
+    # acumulada=6.875 → need = (7.0 - 6.875*0.80) / 0.20 = (7.0 - 5.5) / 0.20 = 7.5
+    metrics = DashboardMetrics.from_api(_status(done=6.875), [], _section_date(0))
     assert metrics.nota_necessaria == pytest.approx(7.5)
 
 
