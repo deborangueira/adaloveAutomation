@@ -1,0 +1,7 @@
+{
+  "api_url": "https://apiv2.inteli.edu.br/sections/<SECTION_ID>/userdata",
+  "token": "Bearer <SEU_TOKEN_JWT>",
+  "teacher_subjects": {
+    "Nome do Professor": "Disciplina"
+  }
+}

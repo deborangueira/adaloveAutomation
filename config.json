@@ -1,0 +1,13 @@
+{
+  "api_url": "https://apiv2.inteli.edu.br/sections/60408f761e4b596e7a90140a98f38dcd/userdata",
+  "token": "Bearer eyJraWQiOiJmb1pDN1JUaHUySzUwaTgzMHo2aHRDY3hFak93VmdHVXJwR2ZBbGJIeXVBPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiIwMWRiMTU3MC1mMGIxLTcwNDMtNmVlMy03MmNmYjUzNjcyNzAiLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMi5hbWF6b25hd3MuY29tL3VzLWVhc3QtMl9DbHk2bnZHcTUiLCJ2ZXJzaW9uIjoyLCJjbGllbnRfaWQiOiI2djZpcWxjdjZobDVwM3U2MjhnZWhvMWNqcCIsIm9yaWdpbl9qdGkiOiJhN2MxYThmZC0zMWVmLTQ2YmQtYmU4OS0xOTNiYzYzZGY0ODQiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6ImF3cy5jb2duaXRvLnNpZ25pbi51c2VyLmFkbWluIG9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzgxMTAyMTQyLCJleHAiOjE3ODE1NTQ1NjAsImlhdCI6MTc4MTU1MDk2MCwianRpIjoiNmZmZGFkOWEtMDRmYi00ZmYyLTgwNzgtMmY1OGIyMjFjYzVkIiwidXNlcm5hbWUiOiI3MDViYTZmNWI3NzUwMjIyZjI2NGQ2MDkwM2NiZTk4ZCJ9.sH10eDCJFtDZx0bhWYEP-ys9lLNoI84qVReesMyMCcM_VCSuXJ6_9SEL-bG1od5AIud1nwhu0eHOCVmrpfR-RBdiCXq0sA8wjPFraTsIIYSOnHWT9E_g5VodmYt9boi5wCatSb9DUQEPOsLv0Z3OTFBhXaHqMfpE-V245cOZdLN3vM9AlO3NNZikoX40Y5uObP3OFxFh6E9y5vyrX_AJ01R_uxNMIM6MzNIVJ32gbs5fuXdIsRrQ918FJvykpQmONK3x8hR7oDhsz4U1aa_zf_pJWjh9dgC4N3zmaQLZe1pDzbnk51Tx_WX4svdJi1O7nRqduUR4GAKFUX7j-eEM4g",
+  "teacher_subjects": {
+    "Afonso Cesar Lelis Brandão": "Programação",
+    "Filipe Gonçalves de Souza Nogueira da Silva": "Liderança",
+    "Francisco de Souza Escobar": "UX",
+    "Hermano Peixoto de Oliveira Junior": "Programação",
+    "Luciano Galdino": "Matemática",
+    "Rafael Ricardo Jacomossi": "Negócios",
+    "Vanessa Tavares Nunes": "Orientação"
+  }
+}
