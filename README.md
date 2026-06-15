@@ -8,6 +8,7 @@ CLI para estudantes do Inteli que consomem a plataforma **Adalove**. Conecta dir
 - **Buscar** — baixa todas as atividades da API, permite filtrar por semanas e disciplinas via menu interativo, e gera dois arquivos em `output/`:
   - `activities-<timestamp>.md` — atividades com título, professor, URL e descrição, organizadas por semana e disciplina.
   - `links-<timestamp>.md` — lista limpa de links das atividades filtradas.
+- **Modo Prova** — gera um arquivo `.md` por disciplina com todos os links do período selecionado, agrupados por matéria, para consulta rápida na véspera de provas.
 - **Setup** — configura credenciais (URL da API + token Bearer) e mapeia cada professor à sua disciplina. Tenta capturar as credenciais automaticamente via Playwright; cai para entrada manual se não estiver instalado.
 
 ## Instalação
