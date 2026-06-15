@@ -31,6 +31,7 @@ from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import filter_activities, get_unique_teachers, get_unique_weeks
 from adalove.writers.links import write_links_md
 from adalove.writers.markdown import write_activities_md
+from adalove.writers.subject_links import write_subject_links_md
 
 app = typer.Typer(
     help="Fetch and filter Adalove activities.",
@@ -259,6 +260,7 @@ def main(ctx: typer.Context) -> None:
             choices=[
                 questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
                 questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
+                questionary.Choice("  Modo Prova —  Links agrupados por disciplina",                     value="subject"),
                 questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
                 questionary.Choice("  Sair",                                                              value="exit"),
             ],
@@ -273,6 +275,8 @@ def main(ctx: typer.Context) -> None:
                 check(ctx)
             elif choice == "fetch":
                 ctx.invoke(fetch)
+            elif choice == "subject":
+                subject_export()
             elif choice == "dashboard":
                 dashboard()
         except typer.Exit:
@@ -490,6 +494,72 @@ def setup() -> None:
         api_url, token = _prompt_credentials()
 
     _run_setup(api_url, token)
+
+
+# ── subject export ────────────────────────────────────────────────────────────
+
+def subject_export() -> None:
+    """Gera um arquivo .md por disciplina com todos os links do período."""
+    _section("Carregando")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
+
+    console.print("  Buscando atividades...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        activities = client.fetch_activities()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError as e:
+        _err(str(e))
+        return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    _ok(f"{len(activities)} atividades carregadas.")
+
+    _section("Filtro de Semanas")
+    _window("Semanas", "[dim]Espaço  selecionar    Enter  confirmar[/dim]")
+    console.print()
+
+    week_choices = [
+        questionary.Choice(title=caption, value=num)
+        for num, caption in get_unique_weeks(activities)
+    ]
+    while True:
+        selected_week_nums = questionary.checkbox(
+            "Selecione as semanas:",
+            choices=week_choices,
+            style=STYLE,
+        ).ask()
+        if selected_week_nums is None:
+            _err("Cancelado.")
+            return
+        if selected_week_nums:
+            break
+        console.print("  [yellow]Selecione ao menos uma semana.[/yellow]")
+
+    filtered = [a for a in activities if a.folder_number in selected_week_nums]
+
+    _section("Resultados")
+
+    paths = write_subject_links_md(filtered, teacher_subjects)
+
+    if not paths:
+        _info("Nenhuma atividade com disciplina mapeada encontrada.")
+        return
+
+    for p in paths:
+        _ok(f"[bold]{p}[/bold]")
+    console.print()
 
 
 # ── fetch ─────────────────────────────────────────────────────────────────────
