@@ -30,12 +30,14 @@ from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import (
     filter_activities,
+    get_project_artifacts,
     get_unique_teachers,
     get_unique_weeks,
     infer_teacher_subjects,
 )
 from adalove.writers.links import write_links_md
 from adalove.writers.markdown import write_activities_md
+from adalove.writers.project import write_project_md
 from adalove.writers.subject_links import write_subject_links_md
 
 app = typer.Typer(
@@ -349,6 +351,7 @@ def main(ctx: typer.Context) -> None:
                 questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
                 questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
                 questionary.Choice("  Modo Prova —  Links agrupados por disciplina",                     value="subject"),
+                questionary.Choice("  Projeto    —  Artefatos de projeto por sprint",                    value="project"),
                 questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
                 questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
                 questionary.Choice("  Sair",                                                              value="exit"),
@@ -366,6 +369,8 @@ def main(ctx: typer.Context) -> None:
                 ctx.invoke(fetch)
             elif choice == "subject":
                 subject_export()
+            elif choice == "project":
+                project_export()
             elif choice == "dashboard":
                 dashboard()
             elif choice == "turma":
@@ -667,6 +672,55 @@ def subject_export() -> None:
 
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
+    console.print()
+
+
+# ── project export ────────────────────────────────────────────────────────────
+
+def project_export() -> None:
+    """Gera um único .md com os artefatos de projeto (Desenvolvimento de Projeto),
+    organizados por sprint."""
+    _section("Carregando")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+
+    console.print("  Buscando atividades...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        activities = client.fetch_activities()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            activities = client.fetch_activities()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    _ok(f"{len(activities)} atividades carregadas.")
+
+    _section("Resultados")
+
+    artifacts = get_project_artifacts(activities)
+    if not artifacts:
+        _info("Nenhum artefato de projeto encontrado nesta turma.")
+        return
+
+    path = write_project_md(activities)
+    _ok(f"{len(artifacts)} artefatos encontrados.")
+    _ok(f"[bold]{path}[/bold]")
     console.print()
 
 

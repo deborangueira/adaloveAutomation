@@ -5,6 +5,11 @@ from adalove.models.activity import Activity
 
 _NAO_PRESENTE = "Não presente no módulo"
 
+# `type` has no name in the API response — 21 was found empirically: it's the
+# only value that shows up exclusively on even weeks (the sprint deliverable
+# cadence), never on odd ones.
+_PROJECT_ARTIFACT_TYPE = 21
+
 
 def filter_activities(
     activities: list[Activity],
@@ -57,3 +62,15 @@ def infer_teacher_subjects(activities: list[Activity]) -> dict[str, str]:
         if subject:
             inferred[teacher] = subject
     return inferred
+
+
+def get_project_artifacts(activities: list[Activity]) -> list[Activity]:
+    """Return the project deliverable cards — the ones due every other week
+    (Semana 02, 04, 06...), one per sprint's wrap-up."""
+    return [a for a in activities if a.type == _PROJECT_ARTIFACT_TYPE]
+
+
+def sprint_number(folder_number: int) -> int:
+    """Semana 02/04/06/08/10 → Sprint 1/2/3/4/5 (delivery lands on the sprint's
+    even-numbered review week)."""
+    return folder_number // 2

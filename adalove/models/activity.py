@@ -22,6 +22,50 @@ def strip_html(html: str | None) -> str:
     return stripper.get_text()
 
 
+class _MarkdownStripper(HTMLParser):
+    """Unlike _HTMLStripper, keeps paragraph/line breaks and turns <strong>/<b>
+    into markdown bold, since project artifact cards rely on that structure
+    (headers, bullet-style lines) to stay readable — not every card follows
+    the same section layout, so flattening to one line would lose it."""
+
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in ("strong", "b"):
+            self._parts.append("**")
+        elif tag == "br":
+            self._parts.append("\n")
+        elif tag == "li":
+            self._parts.append("\n- ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("strong", "b"):
+            self._parts.append("**")
+        elif tag == "p":
+            self._parts.append("\n\n")
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def get_text(self) -> str:
+        raw = "".join(self._parts)
+        lines = [" ".join(line.split()) for line in raw.split("\n")]
+        text = "\n".join(lines)
+        while "\n\n\n" in text:
+            text = text.replace("\n\n\n", "\n\n")
+        return text.strip()
+
+
+def html_to_markdown(html: str | None) -> str:
+    if not html:
+        return ""
+    stripper = _MarkdownStripper()
+    stripper.feed(html)
+    return stripper.get_text()
+
+
 def _parse_folder_number(folder_caption: str) -> int:
     for part in reversed(folder_caption.strip().split()):
         try:
@@ -47,6 +91,7 @@ class Activity:
     grade_weight: int = 0
     grade_result: float = -1.0
     axis_caption: str = ""
+    description_markdown: str = ""
 
     @property
     def is_ponderada(self) -> bool:
@@ -71,4 +116,5 @@ class Activity:
             grade_weight=data.get("gradeWeight") or 0,
             grade_result=float(gr) if gr is not None else -1.0,
             axis_caption=data.get("axisCaption") or "",
+            description_markdown=html_to_markdown(data.get("description")),
         )
