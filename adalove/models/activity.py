@@ -46,6 +46,7 @@ class Activity:
     type: int = 0
     grade_weight: int = 0
     grade_result: float = -1.0
+    axis_caption: str = ""
 
     @property
     def is_ponderada(self) -> bool:
@@ -69,4 +70,5 @@ class Activity:
             type=data.get("type") or 0,
             grade_weight=data.get("gradeWeight") or 0,
             grade_result=float(gr) if gr is not None else -1.0,
+            axis_caption=data.get("axisCaption") or "",
         )

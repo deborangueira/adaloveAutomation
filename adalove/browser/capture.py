@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 try:
@@ -8,11 +9,12 @@ try:
 except ImportError:
     _PLAYWRIGHT_AVAILABLE = False
 
-_ADALOVE_URL = "https://adalove.inteli.edu.br/"
+_ADALOVE_URL = "https://adalove.inteli.edu.br/academic-life"
 _API_HOST = "apiv2.inteli.edu.br/sections/"
 _API_PATH = "/userdata"
 _PROFILE_DIR = Path.home() / ".adalove-browser"
-_TIMEOUT_MS = 10_000
+_POLL_MS = 300
+_LOGIN_WAIT_MS = 180_000
 
 
 def _best_response(captured: list[tuple[str, str, int]]) -> tuple[str, str]:
@@ -33,7 +35,7 @@ def capture_credentials() -> tuple[str, str]:
 
     Raises:
         ImportError: playwright package not installed.
-        PermissionError: browser redirected away from Adalove (user not logged in).
+        PermissionError: user not logged in and didn't log in within the wait window.
         TimeoutError: no matching request captured, or any browser/network error.
         ValueError: matching request had no Authorization header.
     """
@@ -66,22 +68,22 @@ def capture_credentials() -> tuple[str, str]:
             context.on("response", _on_response)
             page = context.new_page()
             try:
+                # Navigating straight to /academic-life triggers the userdata request
+                # once authenticated — whether that happens instantly (existing session)
+                # or after a manual Google login (may bounce through accounts.google.com
+                # first), so we just poll for the capture instead of relying on any
+                # particular UI marker, which breaks every time Adalove's layout changes.
                 page.goto(_ADALOVE_URL, wait_until="domcontentloaded", timeout=15_000)
 
-                if not page.url.startswith(_ADALOVE_URL):
+                deadline = time.monotonic() + _LOGIN_WAIT_MS / 1000
+                while not captured and time.monotonic() < deadline:
+                    page.wait_for_timeout(_POLL_MS)
+
+                if not captured:
                     raise PermissionError(
-                        "Não autenticado — abra o Adalove no seu navegador, faça login e execute o setup novamente."
+                        "Login não detectado — faça login na janela do navegador que abriu "
+                        "e execute o comando novamente."
                     )
-
-                # Expand "Acadêmico" in the sidebar
-                page.locator("span.caption", has_text="Acadêmico").click(timeout=5_000)
-                page.wait_for_timeout(500)
-
-                # Click "Vida Acadêmica" to trigger the API request
-                page.get_by_text("Vida Acadêmica", exact=True).click(timeout=5_000)
-
-                # Wait for the API request to be captured
-                page.wait_for_timeout(_TIMEOUT_MS)
             finally:
                 context.close()
     except (PermissionError, TimeoutError):

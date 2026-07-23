@@ -55,9 +55,10 @@ def write_activities_md(
     selected_weeks: list[int],
     selected_subjects: list[str],
 ) -> Path:
-    OUTPUT_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
-    path = OUTPUT_DIR / f"activities-{stamp}.md"
+    run_dir = OUTPUT_DIR / stamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "activities.md"
 
     weeks_label = ", ".join(f"Semana {w:02d}" for w in sorted(selected_weeks)) or "Todas"
     subjects_label = ", ".join(sorted(selected_subjects)) or "Todas"

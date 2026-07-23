@@ -24,11 +24,16 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from adalove.api.client import AdaloveClient
+from adalove.api.client import AdaloveClient, token_expired
 from adalove.config.settings import load_config, save_config
 from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
-from adalove.filters.activity import filter_activities, get_unique_teachers, get_unique_weeks
+from adalove.filters.activity import (
+    filter_activities,
+    get_unique_teachers,
+    get_unique_weeks,
+    infer_teacher_subjects,
+)
 from adalove.writers.links import write_links_md
 from adalove.writers.markdown import write_activities_md
 from adalove.writers.subject_links import write_subject_links_md
@@ -183,6 +188,8 @@ def dashboard() -> None:
         _err("config.json não encontrado. Execute o Setup primeiro.")
         return
 
+    config = _ensure_fresh_token(config)
+
     console.print("  Conectando...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
@@ -190,9 +197,14 @@ def dashboard() -> None:
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o Setup novamente.")
         return
-    except PermissionError as e:
-        _err(str(e))
-        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            student_status, activities, section_date = client.fetch_dashboard_data()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
     except (ConnectionError, ValueError) as e:
         _err(str(e))
         return
@@ -239,6 +251,82 @@ def dashboard() -> None:
         raise typer.Exit(0)
 
 
+def turma_info() -> None:
+    """Mostra a turma/módulo da sessão atual e o mapeamento de professores, para
+    conferir que o token configurado se refere à turma certa antes de usar o resto
+    das ferramentas."""
+    _section("Turma Atual")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
+
+    console.print("  Buscando informações da turma...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        section, activities = client.fetch_section_overview()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            teacher_subjects = config.get("teacher_subjects", {})
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            section, activities = client.fetch_section_overview()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    console.print()
+    info_tbl = Table(box=box.SIMPLE_HEAVY, show_header=False, padding=(0, 2))
+    info_tbl.add_column("label", style="dim")
+    info_tbl.add_column("value", style="bold white")
+    info_tbl.add_row("Turma", section.section_caption)
+    info_tbl.add_row("Módulo", section.project_caption)
+    info_tbl.add_row("Descrição", section.project_description)
+    info_tbl.add_row("Orientador(a)", section.advisor_name)
+    info_tbl.add_row("Grupo", section.group_caption)
+    info_tbl.add_row("Data da seção", section.section_date)
+    console.print(info_tbl)
+
+    _section("Disciplinas → Professores")
+
+    teachers = get_unique_teachers(activities)
+    inferred = infer_teacher_subjects(activities)
+    if not teachers:
+        _info("Nenhum professor encontrado nas atividades.")
+    else:
+        for teacher in teachers:
+            subject = teacher_subjects.get(teacher)
+            if subject:
+                console.print(f"  [dim]•[/dim]  [bold]{subject}[/bold] → {teacher}")
+            elif teacher in inferred:
+                console.print(
+                    f"  [dim]•[/dim]  [bold]{inferred[teacher]}[/bold] → {teacher} "
+                    "[dim](inferido pelo eixo, não salvo — rode o Setup)[/dim]"
+                )
+            else:
+                console.print(f"  [bold yellow]•[/bold yellow]  [yellow]sem disciplina mapeada[/yellow] → {teacher}")
+
+    console.print()
+    result = questionary.select(
+        "Turma",
+        choices=[questionary.Choice("← Voltar ao menu", value="back")],
+        style=STYLE,
+    ).ask()
+    if result is None:
+        raise typer.Exit(0)
+
+
 # ── main menu ─────────────────────────────────────────────────────────────────
 
 @app.callback()
@@ -258,10 +346,11 @@ def main(ctx: typer.Context) -> None:
         choice = questionary.select(
             "Escolha uma opção:",
             choices=[
-                questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
-                questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
-                questionary.Choice("  Modo Prova —  Links agrupados por disciplina",                     value="subject"),
+                questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
                 questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
+                questionary.Choice("  Modo Prova —  Links agrupados por disciplina",                     value="subject"),
+                questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
+                questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
                 questionary.Choice("  Sair",                                                              value="exit"),
             ],
             style=STYLE,
@@ -279,6 +368,8 @@ def main(ctx: typer.Context) -> None:
                 subject_export()
             elif choice == "dashboard":
                 dashboard()
+            elif choice == "turma":
+                turma_info()
         except typer.Exit:
             pass
 
@@ -300,6 +391,8 @@ def check(ctx: typer.Context) -> None:
         setup()
         return
 
+    config = _ensure_fresh_token(config)
+
     console.print("  Conectando à API...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
@@ -312,29 +405,7 @@ def check(ctx: typer.Context) -> None:
         setup()
         return
     except PermissionError:
-        _err("Token expirado ou inválido.")
-        console.print()
-        _info("Tentando capturar novas credenciais automaticamente...")
-        console.print()
-        try:
-            from adalove.browser.capture import capture_credentials
-            api_url, new_token = capture_credentials()
-            _ok("Credenciais capturadas. Reconfigurando...")
-            console.print()
-            _run_setup(api_url, new_token)
-            return
-        except ImportError:
-            _info("Playwright não instalado — voltando para configuração manual.")
-        except PermissionError as e:
-            _err(str(e))
-            raise typer.Exit(1)
-        except (TimeoutError, ValueError) as e:
-            _err(f"Captura automática falhou: {e}")
-            _info("Voltando para configuração manual.")
-        console.print()
-        _section("Credenciais")
-        api_url, token = _prompt_credentials()
-        _run_setup(api_url, token)
+        _recapture_and_reload()
         return
     except (ConnectionError, ValueError) as e:
         _err(str(e))
@@ -409,41 +480,24 @@ def _run_setup(api_url: str, token: str) -> None:
 
     _section("Mapeamento de Professores")
 
-    teacher_subjects: dict[str, str] = {}
-
     try:
-        existing = load_config()
-        existing_map: dict[str, str] = existing.get("teacher_subjects", {})
+        existing_map: dict[str, str] = load_config().get("teacher_subjects", {})
     except FileNotFoundError:
         existing_map = {}
 
-    if existing_map:
-        for teacher, subject in existing_map.items():
-            _info(f"  {teacher} → {subject}")
-        console.print()
-        keep = questionary.confirm(
-            "Manter o mapeamento de professores existente?",
-            default=True,
-            style=STYLE,
-        ).ask()
-        if keep is None:
-            _err("Cancelado.")
-            raise typer.Exit(0)
-        if keep:
-            teacher_subjects = existing_map
+    inferred = infer_teacher_subjects(activities)
+
+    teacher_subjects: dict[str, str] = {}
+    for teacher in teachers:
+        if teacher in existing_map:
+            subject = existing_map[teacher]
+            teacher_subjects[teacher] = subject
+            _info(f"{subject} → {teacher}")
+        elif teacher in inferred:
+            subject = inferred[teacher]
+            teacher_subjects[teacher] = subject
+            _ok(f"{subject} → {teacher}  [dim](inferido automaticamente pelo eixo)[/dim]")
         else:
-            for teacher in teachers:
-                subject = questionary.select(
-                    f"{teacher}:",
-                    choices=SUBJECTS,
-                    style=STYLE,
-                ).ask()
-                if subject is None:
-                    _err("Cancelado.")
-                    raise typer.Exit(0)
-                teacher_subjects[teacher] = subject
-    else:
-        for teacher in teachers:
             subject = questionary.select(
                 f"{teacher}:",
                 choices=SUBJECTS,
@@ -474,7 +528,8 @@ def setup() -> None:
     api_url: str | None = None
     token: str | None = None
 
-    _info("Tentando capturar credenciais automaticamente pelo navegador...")
+    _info("Configurando sessão pelo navegador...")
+    _info("Uma aba pode abrir e fechar sozinha em alguns segundos — é esperado.")
     try:
         from adalove.browser.capture import capture_credentials
         api_url, token = capture_credentials()
@@ -496,6 +551,52 @@ def setup() -> None:
     _run_setup(api_url, token)
 
 
+def _recapture_and_reload() -> dict:
+    """Handle an expired/invalid token: try automatic browser recapture first (falling
+    back to manual entry), persist the refreshed credentials via `_run_setup`, and return
+    the freshly saved config so the caller can retry its request.
+
+    Raises typer.Exit(1) if the user's Adalove browser session itself is invalid
+    (capture_credentials raised PermissionError) — there's nothing to fall back to there.
+    """
+    _err("Token expirado ou inválido.")
+    console.print()
+    _info("Configurando sessão automaticamente pelo navegador...")
+    _info("Uma aba pode abrir e fechar sozinha em alguns segundos — é esperado.")
+    console.print()
+    try:
+        from adalove.browser.capture import capture_credentials
+        api_url, new_token = capture_credentials()
+        _ok("Credenciais capturadas automaticamente.")
+    except ImportError:
+        _info("Playwright não instalado — voltando para configuração manual.")
+        console.print()
+        api_url, new_token = _prompt_credentials()
+    except PermissionError as e:
+        _err(str(e))
+        raise typer.Exit(1)
+    except (TimeoutError, ValueError) as e:
+        _err(f"Captura automática falhou: {e}")
+        _info("Voltando para configuração manual.")
+        console.print()
+        api_url, new_token = _prompt_credentials()
+
+    console.print()
+    _run_setup(api_url, new_token)
+    return load_config()
+
+
+def _ensure_fresh_token(config: dict) -> dict:
+    """Proactively refresh the token if it's already expired, instead of waiting
+    for the API to reject it with a 401. Adalove tokens last ~1h, so after any
+    real gap between uses (the common case) the saved token is guaranteed stale —
+    this skips that guaranteed-to-fail first request straight to recapture.
+    """
+    if token_expired(config.get("token", "")):
+        config = _recapture_and_reload()
+    return config
+
+
 # ── subject export ────────────────────────────────────────────────────────────
 
 def subject_export() -> None:
@@ -508,6 +609,7 @@ def subject_export() -> None:
         _err(str(e))
         return
 
+    config = _ensure_fresh_token(config)
     teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
 
     console.print("  Buscando atividades...")
@@ -517,9 +619,15 @@ def subject_export() -> None:
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         return
-    except PermissionError as e:
-        _err(str(e))
-        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            teacher_subjects = config.get("teacher_subjects", {})
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            activities = client.fetch_activities()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
     except (ConnectionError, ValueError) as e:
         _err(str(e))
         return
@@ -575,6 +683,7 @@ def fetch() -> None:
         _err(str(e))
         raise typer.Exit(1)
 
+    config = _ensure_fresh_token(config)
     teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
 
     console.print("  Buscando atividades...")
@@ -584,9 +693,15 @@ def fetch() -> None:
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         raise typer.Exit(1)
-    except PermissionError as e:
-        _err(str(e))
-        raise typer.Exit(1)
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            teacher_subjects = config.get("teacher_subjects", {})
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            activities = client.fetch_activities()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            raise typer.Exit(1)
     except (ConnectionError, ValueError) as e:
         _err(str(e))
         raise typer.Exit(1)

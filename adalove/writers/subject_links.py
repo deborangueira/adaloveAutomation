@@ -35,6 +35,9 @@ def write_subject_links_md(
         if subject and subject != "Não presente no módulo":
             by_subject[subject].append(a)
 
+    run_dir = OUTPUT_DIR / stamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+
     paths: list[Path] = []
     for subject, acts in sorted(by_subject.items()):
         professors = sorted({a.professor_name for a in acts if a.professor_name})
@@ -69,7 +72,7 @@ def write_subject_links_md(
             lines.append("")
 
         slug = subject.lower().replace(" ", "-")
-        path = OUTPUT_DIR / f"{slug}-{stamp}.md"
+        path = run_dir / f"{slug}.md"
         path.write_text("\n".join(lines), encoding="utf-8")
         paths.append(path)
 
