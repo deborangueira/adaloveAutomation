@@ -30,12 +30,14 @@ from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import (
     filter_activities,
+    get_ponderadas,
     get_project_artifacts,
     get_unique_teachers,
     get_unique_weeks,
     infer_teacher_subjects,
 )
 from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
+from adalove.writers.ponderadas import write_ponderadas_md
 from adalove.writers.project import write_project_md
 from adalove.writers.subject_links import write_subject_links_md
 
@@ -348,10 +350,11 @@ def main(ctx: typer.Context) -> None:
             "Escolha uma opção:",
             choices=[
                 questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
-                questionary.Choice("  Dashboard  —  Ver frequência e progresso",                        value="dashboard"),
-                questionary.Choice("  Modo Prova —  Autoestudos e assuntos das 8 primeiras semanas", value="subject"),
+                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",            value="ponderadas"),
                 questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                    value="project"),
+                questionary.Choice("  Prova      —  Todos os Autoestudos da prova", value="subject"),
                 questionary.Choice("  Buscar     —  Baixar autoestudos por semana e disciplina",                        value="fetch"),
+                questionary.Choice("  Dashboard  —  Ver frequência e progresso",                        value="dashboard"),
                 questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
                 questionary.Choice("  Sair",                                                              value="exit"),
             ],
@@ -372,6 +375,8 @@ def main(ctx: typer.Context) -> None:
                 project_export()
             elif choice == "dashboard":
                 dashboard()
+            elif choice == "ponderadas":
+                ponderadas_export()
             elif choice == "turma":
                 turma_info()
         except typer.Exit:
@@ -701,6 +706,55 @@ def project_export() -> None:
 
     paths = write_project_md(activities, section.section_caption)
     _ok(f"{len(artifacts)} artefatos encontrados.")
+    for p in paths:
+        _ok(f"[bold]{p}[/bold]")
+    console.print()
+
+
+# ── ponderadas export ─────────────────────────────────────────────────────────
+
+def ponderadas_export() -> None:
+    """Gera um .md por semana com atividades ponderadas, mais um consolidado."""
+    _section("Carregando")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+
+    console.print("  Buscando atividades...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        section, activities = client.fetch_section_overview()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            section, activities = client.fetch_section_overview()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    _ok(f"{len(activities)} atividades carregadas.")
+
+    _section("Resultados")
+
+    ponderadas = get_ponderadas(activities)
+    if not ponderadas:
+        _info("Nenhuma atividade ponderada encontrada nesta turma.")
+        return
+
+    paths = write_ponderadas_md(activities, section.section_caption)
+    _ok(f"{len(ponderadas)} atividades ponderadas encontradas.")
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
     console.print()

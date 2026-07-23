@@ -92,6 +92,7 @@ class Activity:
     grade_result: float = -1.0
     axis_caption: str = ""
     description_markdown: str = ""
+    avaliacao_markdown: str = ""
 
     @property
     def is_ponderada(self) -> bool:
@@ -117,4 +118,5 @@ class Activity:
             grade_result=float(gr) if gr is not None else -1.0,
             axis_caption=data.get("axisCaption") or "",
             description_markdown=html_to_markdown(data.get("description")),
+            avaliacao_markdown=html_to_markdown(data.get("studyQuestion")),
         )

@@ -10,6 +10,13 @@ _NAO_PRESENTE = "Não presente no módulo"
 # cadence), never on odd ones.
 _PROJECT_ARTIFACT_TYPE = 21
 
+# 11 is the "Autoestudo" category shown in the Adalove UI — found empirically,
+# since every card whose caption literally says "Autoestudo" turned out to be
+# type 11 (though not every type-11 card is captioned that way). Combined with
+# gradeWeight > 0 (the UI's "Atividade ponderada: X pontos" badge), this is
+# exactly the graded-deliverable self-studies, no more and no less.
+_PONDERADA_TYPE = 11
+
 
 def filter_activities(
     activities: list[Activity],
@@ -74,3 +81,9 @@ def sprint_number(folder_number: int) -> int:
     """Semana 02/04/06/08/10 → Sprint 1/2/3/4/5 (delivery lands on the sprint's
     even-numbered review week)."""
     return folder_number // 2
+
+
+def get_ponderadas(activities: list[Activity]) -> list[Activity]:
+    """Return the graded self-study deliverables — Adalove's "Autoestudo"
+    category (type 11) that also carries a grade weight."""
+    return [a for a in activities if a.type == _PONDERADA_TYPE and a.grade_weight > 0]
