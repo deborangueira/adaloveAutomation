@@ -1,6 +1,6 @@
 import pytest
 from adalove.models.activity import Activity
-from adalove.writers.fetch import write_fetch_md
+from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def test_multiple_subjects_produce_one_file_each(tmp_output):
     ]
     paths = write_fetch_md(activities, TEACHER_SUBJECTS, [1, 2, 3], ["Programação", "Matemática"], "T1")
     names = sorted(p.name for p in paths)
-    assert names == ["matemática_semana-01-02-03.md", "programação_semana-01-02-03.md"]
+    assert names == ["matemática_semana-01-02-03_completo.md", "programação_semana-01-02-03_completo.md"]
 
 
 def test_multiple_weeks_stay_in_the_same_subject_file(tmp_output):
@@ -71,30 +71,30 @@ def test_file_contains_week_heading_and_activity_title(tmp_output):
     assert "#### Aula 1" in content
 
 
-def test_file_contains_url_in_detail_section(tmp_output):
+def test_file_contains_link_inline_right_under_professor(tmp_output):
     activities = [make_activity("Aula 1", "Prof A", 5, "Semana 05", url="https://youtube.com/xyz")]
     paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1")
-    content = paths[0].read_text(encoding="utf-8")
-    assert "**URL:** https://youtube.com/xyz" in content
+    lines = paths[0].read_text(encoding="utf-8").splitlines()
+    professor_line = lines.index("**Professor:** Prof A")
+    assert lines[professor_line + 1] == "**Link:** https://youtube.com/xyz"
 
 
-def test_file_omits_url_line_when_empty(tmp_output):
+def test_file_omits_link_line_when_empty(tmp_output):
     activities = [make_activity("Aula 1", "Prof A", 5, "Semana 05", url="")]
     paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1")
     content = paths[0].read_text(encoding="utf-8")
-    assert "**URL:**" not in content
+    assert "**Link:**" not in content
 
 
-def test_file_contains_single_links_section_without_urlless_activities(tmp_output):
+def test_no_trailing_links_roundup_section(tmp_output):
     activities = [
         make_activity("Aula 1", "Prof A", 5, "Semana 05", url="https://ex.com/1"),
         make_activity("Sem URL", "Prof A", 5, "Semana 05", url=""),
     ]
     paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1")
     content = paths[0].read_text(encoding="utf-8")
-    assert content.count("## Links") == 1
-    assert "- [Aula 1](https://ex.com/1)" in content
-    assert "Sem URL" not in content.split("## Links")[1]
+    assert "## Links" not in content
+    assert "**Link:** https://ex.com/1" in content
 
 
 def test_weeks_sorted_ascending_in_detail_section(tmp_output):
@@ -112,3 +112,46 @@ def test_subject_with_no_matching_activities_produces_no_file(tmp_output):
     paths = write_fetch_md(activities, TEACHER_SUBJECTS, [1], ["Programação", "Matemática"], "T1")
     assert len(paths) == 1
     assert paths[0].name.startswith("programação")
+
+
+def test_mode_completo_is_the_default_and_has_title_professor_link_and_description(tmp_output):
+    activities = [make_activity("Aula 1", "Prof A", 5, "Semana 05", url="https://ex.com/1", description="Descrição X")]
+    paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1")
+    assert paths[0].name.endswith("_completo.md")
+    content = paths[0].read_text(encoding="utf-8")
+    assert "#### Aula 1" in content
+    assert "**Professor:** Prof A" in content
+    assert "**Link:** https://ex.com/1" in content
+    assert "Descrição X" in content
+
+
+def test_mode_descricao_omits_link_but_keeps_title_professor_and_description(tmp_output):
+    activities = [make_activity("Aula 1", "Prof A", 5, "Semana 05", url="https://ex.com/1", description="Descrição X")]
+    paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1", mode=MODE_DESCRICAO)
+    assert paths[0].name.endswith("_descricao.md")
+    content = paths[0].read_text(encoding="utf-8")
+    assert "#### Aula 1" in content
+    assert "**Professor:** Prof A" in content
+    assert "**Link:**" not in content
+    assert "Descrição X" in content
+
+
+def test_mode_link_is_a_compact_list_without_title_professor_or_description(tmp_output):
+    activities = [
+        make_activity("Aula 1", "Prof A", 5, "Semana 05", url="https://ex.com/1", description="Descrição X"),
+        make_activity("Sem URL", "Prof A", 5, "Semana 05", url=""),
+    ]
+    paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1", mode=MODE_LINK)
+    assert paths[0].name.endswith("_link.md")
+    content = paths[0].read_text(encoding="utf-8")
+    assert "- [Aula 1](https://ex.com/1)" in content
+    assert "#### Aula 1" not in content
+    assert "**Professor:**" not in content
+    assert "Descrição X" not in content
+    assert "Sem URL" not in content
+
+
+def test_invalid_mode_raises(tmp_output):
+    activities = [make_activity("Aula 1", "Prof A", 5, "Semana 05")]
+    with pytest.raises(ValueError):
+        write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1", mode="bogus")

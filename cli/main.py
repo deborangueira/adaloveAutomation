@@ -35,7 +35,7 @@ from adalove.filters.activity import (
     get_unique_weeks,
     infer_teacher_subjects,
 )
-from adalove.writers.fetch import write_fetch_md
+from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
 from adalove.writers.project import write_project_md
 from adalove.writers.subject_links import write_subject_links_md
 
@@ -784,6 +784,23 @@ def fetch() -> None:
             break
         console.print("  [yellow]Selecione ao menos uma disciplina.[/yellow]")
 
+    console.print()
+    _window("Conteúdo", "[dim]Enter  confirmar[/dim]")
+    console.print()
+
+    content_mode = questionary.select(
+        "O que incluir no arquivo?",
+        choices=[
+            questionary.Choice("Só link", value=MODE_LINK),
+            questionary.Choice("Só descrição", value=MODE_DESCRICAO),
+            questionary.Choice("Ambos juntos", value=MODE_COMPLETO),
+        ],
+        style=STYLE,
+    ).ask()
+    if content_mode is None:
+        _err("Cancelado.")
+        raise typer.Exit(0)
+
     filtered = filter_activities(
         activities=activities,
         weeks=selected_week_nums,
@@ -801,8 +818,13 @@ def fetch() -> None:
     _info(f"{len(filtered)} atividades encontradas.")
 
     paths = write_fetch_md(
-        filtered, teacher_subjects, selected_week_nums, selected_subjects, section.section_caption
+        filtered, teacher_subjects, selected_week_nums, selected_subjects, section.section_caption, content_mode
     )
+
+    if not paths:
+        _info("Nenhum arquivo gerado — nenhuma disciplina selecionada teve atividades nas semanas escolhidas.")
+        console.print()
+        return
 
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
