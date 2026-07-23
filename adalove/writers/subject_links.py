@@ -1,10 +1,11 @@
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from adalove.models.activity import Activity
 
 OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
+_UNKNOWN_TURMA = "turma-desconhecida"
 
 _BOOK_KEYWORDS = ("sophia", "minhabiblioteca", "minha-biblioteca", "bibliografiainterativa")
 _EXCLUDED_DOMAINS = ("inteli.edu.br",)
@@ -23,10 +24,13 @@ def _is_excluded_url(url: str) -> bool:
 def write_subject_links_md(
     activities: list[Activity],
     teacher_subjects: dict[str, str],
+    turma: str,
 ) -> list[Path]:
-    """Write one .md per subject with all links; Sophia/biblioteca links in a separate section."""
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+    """Write one .md per subject with all links; Sophia/biblioteca links in a separate section.
+
+    Lands in output/<turma>/prova/, overwritten on every run — this is a
+    current snapshot of the module, not a history of past runs.
+    """
     today = date.today().isoformat()
 
     by_subject: dict[str, list[Activity]] = defaultdict(list)
@@ -35,7 +39,7 @@ def write_subject_links_md(
         if subject and subject != "Não presente no módulo":
             by_subject[subject].append(a)
 
-    run_dir = OUTPUT_DIR / stamp
+    run_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA) / "prova"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     paths: list[Path] = []

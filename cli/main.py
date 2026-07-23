@@ -35,8 +35,7 @@ from adalove.filters.activity import (
     get_unique_weeks,
     infer_teacher_subjects,
 )
-from adalove.writers.links import write_links_md
-from adalove.writers.markdown import write_activities_md
+from adalove.writers.fetch import write_fetch_md
 from adalove.writers.project import write_project_md
 from adalove.writers.subject_links import write_subject_links_md
 
@@ -349,10 +348,10 @@ def main(ctx: typer.Context) -> None:
             "Escolha uma opção:",
             choices=[
                 questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
-                questionary.Choice("  Dashboard  —  Ver resumo do seu progresso",                        value="dashboard"),
-                questionary.Choice("  Modo Prova —  Links agrupados por disciplina",                     value="subject"),
-                questionary.Choice("  Projeto    —  Artefatos de projeto por sprint",                    value="project"),
-                questionary.Choice("  Buscar     —  Baixar e filtrar atividades",                        value="fetch"),
+                questionary.Choice("  Dashboard  —  Ver frequência e progresso",                        value="dashboard"),
+                questionary.Choice("  Modo Prova —  Autoestudos e assuntos das 8 primeiras semanas", value="subject"),
+                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                    value="project"),
+                questionary.Choice("  Buscar     —  Baixar autoestudos por semana e disciplina",                        value="fetch"),
                 questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
                 questionary.Choice("  Sair",                                                              value="exit"),
             ],
@@ -604,8 +603,11 @@ def _ensure_fresh_token(config: dict) -> dict:
 
 # ── subject export ────────────────────────────────────────────────────────────
 
+_MODO_PROVA_WEEKS = range(1, 9)
+
+
 def subject_export() -> None:
-    """Gera um arquivo .md por disciplina com todos os links do período."""
+    """Gera um arquivo .md por disciplina com todos os links das 8 primeiras semanas."""
     _section("Carregando")
 
     try:
@@ -620,7 +622,7 @@ def subject_export() -> None:
     console.print("  Buscando atividades...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        activities = client.fetch_activities()
+        section, activities = client.fetch_section_overview()
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         return
@@ -629,7 +631,7 @@ def subject_export() -> None:
             config = _recapture_and_reload()
             teacher_subjects = config.get("teacher_subjects", {})
             client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            activities = client.fetch_activities()
+            section, activities = client.fetch_section_overview()
         except (ConnectionError, ValueError) as e:
             _err(str(e))
             return
@@ -639,32 +641,11 @@ def subject_export() -> None:
 
     _ok(f"{len(activities)} atividades carregadas.")
 
-    _section("Filtro de Semanas")
-    _window("Semanas", "[dim]Espaço  selecionar    Enter  confirmar[/dim]")
-    console.print()
-
-    week_choices = [
-        questionary.Choice(title=caption, value=num)
-        for num, caption in get_unique_weeks(activities)
-    ]
-    while True:
-        selected_week_nums = questionary.checkbox(
-            "Selecione as semanas:",
-            choices=week_choices,
-            style=STYLE,
-        ).ask()
-        if selected_week_nums is None:
-            _err("Cancelado.")
-            return
-        if selected_week_nums:
-            break
-        console.print("  [yellow]Selecione ao menos uma semana.[/yellow]")
-
-    filtered = [a for a in activities if a.folder_number in selected_week_nums]
+    filtered = [a for a in activities if a.folder_number in _MODO_PROVA_WEEKS]
 
     _section("Resultados")
 
-    paths = write_subject_links_md(filtered, teacher_subjects)
+    paths = write_subject_links_md(filtered, teacher_subjects, section.section_caption)
 
     if not paths:
         _info("Nenhuma atividade com disciplina mapeada encontrada.")
@@ -693,7 +674,7 @@ def project_export() -> None:
     console.print("  Buscando atividades...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        activities = client.fetch_activities()
+        section, activities = client.fetch_section_overview()
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         return
@@ -701,7 +682,7 @@ def project_export() -> None:
         try:
             config = _recapture_and_reload()
             client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            activities = client.fetch_activities()
+            section, activities = client.fetch_section_overview()
         except (ConnectionError, ValueError) as e:
             _err(str(e))
             return
@@ -718,9 +699,10 @@ def project_export() -> None:
         _info("Nenhum artefato de projeto encontrado nesta turma.")
         return
 
-    path = write_project_md(activities)
+    paths = write_project_md(activities, section.section_caption)
     _ok(f"{len(artifacts)} artefatos encontrados.")
-    _ok(f"[bold]{path}[/bold]")
+    for p in paths:
+        _ok(f"[bold]{p}[/bold]")
     console.print()
 
 
@@ -743,7 +725,7 @@ def fetch() -> None:
     console.print("  Buscando atividades...")
     try:
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        activities = client.fetch_activities()
+        section, activities = client.fetch_section_overview()
     except KeyError as e:
         _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
         raise typer.Exit(1)
@@ -752,7 +734,7 @@ def fetch() -> None:
             config = _recapture_and_reload()
             teacher_subjects = config.get("teacher_subjects", {})
             client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            activities = client.fetch_activities()
+            section, activities = client.fetch_section_overview()
         except (ConnectionError, ValueError) as e:
             _err(str(e))
             raise typer.Exit(1)
@@ -818,15 +800,12 @@ def fetch() -> None:
 
     _info(f"{len(filtered)} atividades encontradas.")
 
-    activities_path = write_activities_md(
-        filtered, teacher_subjects, selected_week_nums, selected_subjects
-    )
-    links_path = write_links_md(
-        filtered, teacher_subjects, selected_week_nums, selected_subjects
+    paths = write_fetch_md(
+        filtered, teacher_subjects, selected_week_nums, selected_subjects, section.section_caption
     )
 
-    _ok(f"[bold]{activities_path}[/bold]  [dim]({len(filtered)} atividades)[/dim]")
-    _ok(f"[bold]{links_path}[/bold]  [dim]({len([a for a in filtered if a.url])} links)[/dim]")
+    for p in paths:
+        _ok(f"[bold]{p}[/bold]")
     console.print()
 
 
