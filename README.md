@@ -129,3 +129,7 @@ output/        # arquivos gerados (gitignored)
 ```bash
 pytest -q
 ```
+
+## Créditos
+
+Este projeto aproveitou o trabalho desenvolvido e disponibilizado pelo **Rafael Josué** num repositório público que estruturava a base do CLI (cliente da API, filtros, modelos) e a captura de credenciais via Playwright. Esse trabalho inicial foi o pontapé pra toda a automação construída depois por **Débora Nogueira**.
