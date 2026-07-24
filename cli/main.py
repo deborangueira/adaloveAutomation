@@ -351,12 +351,12 @@ def main(ctx: typer.Context) -> None:
         choice = questionary.select(
             "Escolha uma opção:",
             choices=[
-                questionary.Choice("  Turma           —  Ver turma e professores da sessão atual",         value="turma"),
-                questionary.Choice("  Material da Turma —  Calendário, Projeto, Prova e Ponderadas",        value="material"),
-                questionary.Choice("  Buscar          —  Baixar autoestudos por semana e disciplina",       value="fetch"),
-                questionary.Choice("  Dashboard       —  Ver frequência e progresso",                       value="dashboard"),
-                questionary.Choice("  Setup           —  Configurar credenciais e mapeamento de professores", value="setup"),
-                questionary.Choice("  Sair",                                                                 value="exit"),
+                questionary.Choice("  Turma         —  Ver turma e professores da sessão atual",         value="turma"),
+                questionary.Choice("  Exportar tudo —  Calendário, Projeto, Prova, Ponderadas de uma vez", value="tudo"),
+                questionary.Choice("  Material      —  Ver conteúdo da turma",  value="material"),
+                questionary.Choice("  Dashboard     —  Ver frequência e progresso",                       value="dashboard"),
+                questionary.Choice("  Setup         —  Configurar credenciais e mapeamento de professores", value="setup"),
+                questionary.Choice("  Sair",                                                               value="exit"),
             ],
             style=STYLE,
         ).ask()
@@ -367,8 +367,8 @@ def main(ctx: typer.Context) -> None:
         try:
             if choice == "setup":
                 check(ctx)
-            elif choice == "fetch":
-                ctx.invoke(fetch)
+            elif choice == "tudo":
+                gerar_tudo_turma()
             elif choice == "material":
                 material_turma_menu()
             elif choice == "dashboard":
@@ -381,12 +381,12 @@ def main(ctx: typer.Context) -> None:
 
 def material_turma_menu() -> None:
     """Submenu com as saídas geradas a partir da turma atual: Calendário,
-    Projeto, Prova e Ponderadas — individualmente ou tudo de uma vez."""
+    Projeto, Prova, Ponderadas e Buscar."""
     while True:
-        _header("Material da Turma")
+        _header("Material")
 
         _window(
-            "Material da Turma",
+            "Material",
             "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
         )
         console.print()
@@ -394,12 +394,12 @@ def material_turma_menu() -> None:
         choice = questionary.select(
             "Escolha uma opção:",
             choices=[
-                questionary.Choice("  Gerar tudo —  Calendário + Projeto + Prova + Ponderadas de uma vez", value="tudo"),
-                questionary.Choice("  Calendário —  Todos os encontros da turma",                          value="calendario"),
-                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                        value="project"),
-                questionary.Choice("  Prova      —  Todos os Autoestudos da prova",                        value="subject"),
-                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",                          value="ponderadas"),
-                questionary.Choice("  ← Voltar",                                                            value="back"),
+                questionary.Choice("  Calendário —  Todos os encontros da turma",                    value="calendario"),
+                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                  value="project"),
+                questionary.Choice("  Prova      —  Todos os Autoestudos da prova",                  value="subject"),
+                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",                    value="ponderadas"),
+                questionary.Choice("  Buscar     —  Baixar autoestudos por semana e disciplina",      value="fetch"),
+                questionary.Choice("  ← Voltar",                                                      value="back"),
             ],
             style=STYLE,
         ).ask()
@@ -408,9 +408,7 @@ def material_turma_menu() -> None:
             return
 
         try:
-            if choice == "tudo":
-                gerar_tudo_turma()
-            elif choice == "calendario":
+            if choice == "calendario":
                 calendario_export()
             elif choice == "project":
                 project_export()
@@ -418,6 +416,8 @@ def material_turma_menu() -> None:
                 subject_export()
             elif choice == "ponderadas":
                 ponderadas_export()
+            elif choice == "fetch":
+                fetch()
         except typer.Exit:
             pass
 
