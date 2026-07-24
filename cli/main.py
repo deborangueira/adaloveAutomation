@@ -1,3 +1,4 @@
+import platform
 import subprocess
 import sys
 import math
@@ -121,16 +122,49 @@ _OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
 
 
 def _pick_destination_folder() -> Path | None:
-    """Open macOS's native folder picker and return the chosen path, or None
-    if the user cancels. Uses `osascript` (AppleScript) — no extra dependency,
-    and more reliable across Python builds than tkinter's file dialogs."""
+    """Open a native folder picker and return the chosen path, or None if the
+    user cancels (or no picker is available on this OS/desktop).
+
+    macOS uses `osascript` (AppleScript); Windows uses PowerShell's built-in
+    FolderBrowserDialog; Linux tries `zenity` then `kdialog` — whichever the
+    desktop environment ships. No extra Python dependency either way, and
+    more reliable across Python builds than tkinter's file dialogs.
+    """
+    system = platform.system()
     try:
-        result = subprocess.run(
-            ["osascript", "-e", 'POSIX path of (choose folder with prompt "Selecione a pasta de destino")'],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        if system == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", 'POSIX path of (choose folder with prompt "Selecione a pasta de destino")'],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        elif system == "Windows":
+            script = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                "$f.Description = 'Selecione a pasta de destino'; "
+                "if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath }"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        else:
+            result = None
+            for cmd in (
+                ["zenity", "--file-selection", "--directory", "--title=Selecione a pasta de destino"],
+                ["kdialog", "--getexistingdirectory", str(Path.home())],
+            ):
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                    break
+                except FileNotFoundError:
+                    continue
+            if result is None:
+                return None
     except (subprocess.SubprocessError, FileNotFoundError):
         return None
     if result.returncode != 0 or not result.stdout.strip():
@@ -149,9 +183,18 @@ def _choose_output_dir() -> Path:
 
 
 def _reveal_in_finder(path: Path) -> None:
-    """Open the given folder in Finder once an export finishes."""
+    """Open the given folder in the OS's file manager once an export
+    finishes — Finder on macOS, Explorer on Windows, whatever `xdg-open`
+    resolves to on Linux."""
+    system = platform.system()
+    if system == "Darwin":
+        cmd = ["open", str(path)]
+    elif system == "Windows":
+        cmd = ["explorer", str(path)]
+    else:
+        cmd = ["xdg-open", str(path)]
     try:
-        subprocess.run(["open", str(path)], check=False)
+        subprocess.run(cmd, check=False)
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
 
