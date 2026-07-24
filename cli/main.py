@@ -351,15 +351,12 @@ def main(ctx: typer.Context) -> None:
         choice = questionary.select(
             "Escolha uma opção:",
             choices=[
-                questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
-                questionary.Choice("  Calendário —  Todos os encontros da turma",            value="calendario"),
-                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",            value="ponderadas"),
-                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                    value="project"),
-                questionary.Choice("  Prova      —  Todos os Autoestudos da prova", value="subject"),
-                questionary.Choice("  Buscar     —  Baixar autoestudos por semana e disciplina",                        value="fetch"),
-                questionary.Choice("  Dashboard  —  Ver frequência e progresso",                        value="dashboard"),
-                questionary.Choice("  Setup      —  Configurar credenciais e mapeamento de professores", value="setup"),
-                questionary.Choice("  Sair",                                                              value="exit"),
+                questionary.Choice("  Turma           —  Ver turma e professores da sessão atual",         value="turma"),
+                questionary.Choice("  Material da Turma —  Calendário, Projeto, Prova e Ponderadas",        value="material"),
+                questionary.Choice("  Buscar          —  Baixar autoestudos por semana e disciplina",       value="fetch"),
+                questionary.Choice("  Dashboard       —  Ver frequência e progresso",                       value="dashboard"),
+                questionary.Choice("  Setup           —  Configurar credenciais e mapeamento de professores", value="setup"),
+                questionary.Choice("  Sair",                                                                 value="exit"),
             ],
             style=STYLE,
         ).ask()
@@ -372,18 +369,55 @@ def main(ctx: typer.Context) -> None:
                 check(ctx)
             elif choice == "fetch":
                 ctx.invoke(fetch)
-            elif choice == "subject":
-                subject_export()
-            elif choice == "project":
-                project_export()
+            elif choice == "material":
+                material_turma_menu()
             elif choice == "dashboard":
                 dashboard()
-            elif choice == "ponderadas":
-                ponderadas_export()
-            elif choice == "calendario":
-                calendario_export()
             elif choice == "turma":
                 turma_info()
+        except typer.Exit:
+            pass
+
+
+def material_turma_menu() -> None:
+    """Submenu com as saídas geradas a partir da turma atual: Calendário,
+    Projeto, Prova e Ponderadas — individualmente ou tudo de uma vez."""
+    while True:
+        _header("Material da Turma")
+
+        _window(
+            "Material da Turma",
+            "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
+        )
+        console.print()
+
+        choice = questionary.select(
+            "Escolha uma opção:",
+            choices=[
+                questionary.Choice("  Gerar tudo —  Calendário + Projeto + Prova + Ponderadas de uma vez", value="tudo"),
+                questionary.Choice("  Calendário —  Todos os encontros da turma",                          value="calendario"),
+                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                        value="project"),
+                questionary.Choice("  Prova      —  Todos os Autoestudos da prova",                        value="subject"),
+                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",                          value="ponderadas"),
+                questionary.Choice("  ← Voltar",                                                            value="back"),
+            ],
+            style=STYLE,
+        ).ask()
+
+        if choice is None or choice == "back":
+            return
+
+        try:
+            if choice == "tudo":
+                gerar_tudo_turma()
+            elif choice == "calendario":
+                calendario_export()
+            elif choice == "project":
+                project_export()
+            elif choice == "subject":
+                subject_export()
+            elif choice == "ponderadas":
+                ponderadas_export()
         except typer.Exit:
             pass
 
@@ -812,6 +846,78 @@ def calendario_export() -> None:
     path = write_calendario_md(activities, section.section_caption, teacher_subjects)
     _ok(f"{len(encontros)} encontros encontrados.")
     _ok(f"[bold]{path}[/bold]")
+    console.print()
+
+
+# ── gerar tudo (turma) ────────────────────────────────────────────────────────
+
+def gerar_tudo_turma() -> None:
+    """Gera Calendário, Projeto, Prova e Ponderadas de uma vez só, a partir de
+    uma única busca de atividades — mesmos writers e mesmo output de sempre,
+    só que sem precisar entrar em cada opção individualmente."""
+    _section("Carregando")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
+
+    console.print("  Buscando atividades...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        section, activities = client.fetch_section_overview()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            teacher_subjects = config.get("teacher_subjects", {})
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            section, activities = client.fetch_section_overview()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    _ok(f"{len(activities)} atividades carregadas.")
+
+    _section("Resultados")
+
+    encontros = get_encontros(activities)
+    if encontros:
+        path = write_calendario_md(activities, section.section_caption, teacher_subjects)
+        _ok(f"Calendário  —  {len(encontros)} encontros  —  [bold]{path}[/bold]")
+    else:
+        _info("Calendário  —  nenhum encontro encontrado.")
+
+    artifacts = get_project_artifacts(activities)
+    if artifacts:
+        paths = write_project_md(activities, section.section_caption)
+        _ok(f"Projeto     —  {len(artifacts)} artefatos  —  {len(paths)} arquivos")
+    else:
+        _info("Projeto     —  nenhum artefato encontrado.")
+
+    prova_filtered = [a for a in activities if a.folder_number in _MODO_PROVA_WEEKS]
+    prova_paths = write_subject_links_md(prova_filtered, teacher_subjects, section.section_caption)
+    if prova_paths:
+        _ok(f"Prova       —  {len(prova_paths)} arquivos")
+    else:
+        _info("Prova       —  nenhuma atividade com disciplina mapeada encontrada.")
+
+    ponderadas = get_ponderadas(activities)
+    if ponderadas:
+        paths = write_ponderadas_md(activities, section.section_caption)
+        _ok(f"Ponderadas  —  {len(ponderadas)} atividades  —  {len(paths)} arquivos")
+    else:
+        _info("Ponderadas  —  nenhuma atividade ponderada encontrada.")
+
     console.print()
 
 
