@@ -11,7 +11,7 @@ A vontade de criar algo assim surgiu do trabalho que senti ao organizar o materi
 - **Lista de todos os artefatos do projeto organizados por sprint**
 - **Um resumo do seu progresso acadêmico** direto no terminal (frequência, nota acumulada, nota necessária na prova).
 
-Fora o último tópico, todas essas informações são exportadas como arquivo markdown para uma pasta de sua escolha no seu computador.
+Todas as informações que geram output são exportadas para uma pasta de sua escolha no seu computador.
 
 ## O que você consegue fazer
 
@@ -50,6 +50,19 @@ adalove fetch    # ir direto pro filtro livre (Buscar)
 ```
 
 Na primeira execução, escolha **Setup**. A partir daí, é só abrir `adalove` e navegar pelo menu — todas as opções acima ficam disponíveis ali.
+
+## Como as atividades são identificadas e classificadas
+
+O sistema tem acesso a todos os cards da turma, mas existe a necessidade de identificar que card é de que tipo de atividade. Nesse processo identifiquei que a API da Adalove mostra apenas um campo numérico `type`, sem rótulo nenhum. A confiança no output, contudo, vem de uma descoberta empírica que uniu evidências de vários lugares: a legenda dos próprios cards (todo card com "Autoestudo" no título era sempre `type 11`), as datas reais dos encontros no calendário da Adalove (que bateram exatamente com `type 1` e `type 2`), e o badge "Atividade ponderada: X pontos" que a interface mostra pra cada nota (confirmando o `gradeWeight`). Cruzando essas pistas cheguei nos quatro valores abaixo.
+
+| Identificação | Classificação | Utilizado no menu em |
+|---|---|---|
+| `type == 1` | **Encontro de projeto** | Material › Calendário e Exportar tudo |
+| `type == 2` | **Encontro de instrução** | Material › Calendário, Material › Prova (seção Instruções, agrupada por sprint) e Exportar tudo |
+| `type == 11` e `gradeWeight > 0` | **Ponderadas** | Material › Ponderadas, Material › Calendário, Material › Buscar (marca "(Ponderada)" nos resultados), Exportar tudo e Dashboard |
+| `type == 11` e `gradeWeight <= 0` | **Autoestudo** | Material › Prova (seção Autoestudo), Exportar tudo e Dashboard |
+
+Qualquer alteração não documentada da Adalove nesses valores pode quebrar essa classificação sem aviso e gerar outputs incorretos.
 
 ## Credenciais: como funciona por baixo dos panos
 
