@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from adalove.filters.activity import get_ponderadas
 from adalove.models.activity import Activity
 
 OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
@@ -24,9 +25,9 @@ def _week_caption(activities: list[Activity], week_num: int) -> str:
     )
 
 
-def _build_activity_block(activity: Activity, show_link: bool) -> list[str]:
+def _build_activity_block(activity: Activity, show_link: bool, ponderada_ids: set[int]) -> list[str]:
     lines = [f"#### {activity.caption}"]
-    if activity.is_ponderada:
+    if id(activity) in ponderada_ids:
         lines.append("**Ponderada**")
     if activity.professor_name:
         lines.append(f"**Professor:** {activity.professor_name}")
@@ -41,7 +42,7 @@ def _build_activity_block(activity: Activity, show_link: bool) -> list[str]:
     return lines
 
 
-def _build_detail_section(activities: list[Activity], show_link: bool) -> list[str]:
+def _build_detail_section(activities: list[Activity], show_link: bool, ponderada_ids: set[int]) -> list[str]:
     grouped: dict[int, list[Activity]] = defaultdict(list)
     for a in activities:
         grouped[a.folder_number].append(a)
@@ -51,11 +52,11 @@ def _build_detail_section(activities: list[Activity], show_link: bool) -> list[s
         lines.append(f"## {_week_caption(activities, week_num)}")
         lines.append("")
         for activity in grouped[week_num]:
-            lines.extend(_build_activity_block(activity, show_link))
+            lines.extend(_build_activity_block(activity, show_link, ponderada_ids))
     return lines
 
 
-def _build_link_list_section(activities: list[Activity]) -> list[str]:
+def _build_link_list_section(activities: list[Activity], ponderada_ids: set[int]) -> list[str]:
     """Compact "só link" rendering: just a bullet list of markdown links per
     week, no professor/description at all."""
     grouped: dict[int, list[Activity]] = defaultdict(list)
@@ -68,7 +69,7 @@ def _build_link_list_section(activities: list[Activity]) -> list[str]:
         lines.append(f"## {_week_caption(activities, week_num)}")
         lines.append("")
         for activity in grouped[week_num]:
-            suffix = " **(Ponderada)**" if activity.is_ponderada else ""
+            suffix = " **(Ponderada)**" if id(activity) in ponderada_ids else ""
             lines.append(f"- [{activity.caption}]({activity.url}){suffix}")
         lines.append("")
     return lines
@@ -98,6 +99,7 @@ def write_fetch_md(
     weeks_label = ", ".join(f"Semana {w:02d}" for w in sorted(selected_weeks)) or "Todas"
     weeks_slug = "-".join(f"{w:02d}" for w in sorted(selected_weeks)) or "todas"
     today = date.today().isoformat()
+    ponderada_ids = {id(a) for a in get_ponderadas(activities)}
 
     by_subject: dict[str, list[Activity]] = defaultdict(list)
     for a in activities:
@@ -112,9 +114,9 @@ def write_fetch_md(
     for subject in sorted(by_subject):
         subject_activities = by_subject[subject]
         if mode == MODE_LINK:
-            body = _build_link_list_section(subject_activities)
+            body = _build_link_list_section(subject_activities, ponderada_ids)
         else:
-            body = _build_detail_section(subject_activities, show_link=(mode == MODE_COMPLETO))
+            body = _build_detail_section(subject_activities, show_link=(mode == MODE_COMPLETO), ponderada_ids=ponderada_ids)
 
         lines: list[str] = [
             f"# {subject} — {weeks_label}",

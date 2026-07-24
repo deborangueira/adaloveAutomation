@@ -9,7 +9,17 @@ def tmp_output(tmp_path, monkeypatch):
     return tmp_path
 
 
-def make_activity(caption, professor, folder_number, folder_caption, url="https://ex.com", description="Desc", tags=None):
+def make_activity(
+    caption,
+    professor,
+    folder_number,
+    folder_caption,
+    url="https://ex.com",
+    description="Desc",
+    tags=None,
+    type=0,
+    grade_weight=0,
+):
     return Activity(
         uuid="x",
         caption=caption,
@@ -21,6 +31,8 @@ def make_activity(caption, professor, folder_number, folder_caption, url="https:
         study_type="class",
         status=1,
         tags=tags or [],
+        type=type,
+        grade_weight=grade_weight,
     )
 
 
@@ -149,6 +161,31 @@ def test_mode_link_is_a_compact_list_without_title_professor_or_description(tmp_
     assert "**Professor:**" not in content
     assert "Descrição X" not in content
     assert "Sem URL" not in content
+
+
+def test_mode_completo_marks_ponderada_by_type_and_weight(tmp_output):
+    activities = [
+        make_activity("Ponderada 1", "Prof A", 5, "Semana 05", type=11, grade_weight=4),
+        make_activity("Autoestudo sem peso", "Prof A", 5, "Semana 05", type=11, grade_weight=0),
+    ]
+    paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1")
+    content = paths[0].read_text(encoding="utf-8")
+    ponderada_block = content.split("#### Ponderada 1")[1].split("#### Autoestudo")[0]
+    assert "**Ponderada**" in ponderada_block
+    autoestudo_block = content.split("#### Autoestudo sem peso")[1]
+    assert "**Ponderada**" not in autoestudo_block
+
+
+def test_mode_link_suffixes_ponderada_by_type_and_weight(tmp_output):
+    activities = [
+        make_activity("Ponderada 1", "Prof A", 5, "Semana 05", url="https://ex.com/1", type=11, grade_weight=4),
+        make_activity("Autoestudo sem peso", "Prof A", 5, "Semana 05", url="https://ex.com/2", type=11, grade_weight=0),
+    ]
+    paths = write_fetch_md(activities, TEACHER_SUBJECTS, [5], ["Programação"], "T1", mode=MODE_LINK)
+    content = paths[0].read_text(encoding="utf-8")
+    assert "- [Ponderada 1](https://ex.com/1) **(Ponderada)**" in content
+    assert "- [Autoestudo sem peso](https://ex.com/2)" in content
+    assert "- [Autoestudo sem peso](https://ex.com/2) **(Ponderada)**" not in content
 
 
 def test_invalid_mode_raises(tmp_output):

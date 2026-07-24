@@ -95,10 +95,6 @@ class Activity:
     avaliacao_markdown: str = ""
     date: str = ""
 
-    @property
-    def is_ponderada(self) -> bool:
-        return any(t.lower() == "ponderada" for t in self.tags)
-
     @classmethod
     def from_api(cls, data: dict) -> "Activity":
         folder_caption = data.get("folderCaption") or ""

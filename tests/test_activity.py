@@ -42,7 +42,6 @@ def test_activity_from_api_maps_fields():
     assert activity.study_type == "class"
     assert activity.status == 1
     assert activity.tags == ["ponderada"]
-    assert activity.is_ponderada is True
 
 
 def test_activity_from_api_handles_missing_url():
@@ -89,23 +88,6 @@ def test_activity_from_api_handles_missing_tags():
     }
     activity = Activity.from_api(raw)
     assert activity.tags == []
-    assert activity.is_ponderada is False
-
-
-def test_is_ponderada_case_insensitive():
-    raw = {
-        "studentActivityUuid": "abc",
-        "caption": "Atividade",
-        "description": "",
-        "basicActivityURL": "",
-        "professorName": "Prof X",
-        "folderCaption": "Semana 02",
-        "study_type": "class",
-        "status": 1,
-        "tags": ["Ponderada"],
-    }
-    activity = Activity.from_api(raw)
-    assert activity.is_ponderada is True
 
 
 def test_activity_from_api_maps_grade_fields():
