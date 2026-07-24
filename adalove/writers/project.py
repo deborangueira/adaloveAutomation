@@ -22,9 +22,10 @@ def _build_sprint_section(week_num: int, artifacts: list[Activity]) -> list[str]
     return lines
 
 
-def write_project_md(activities: list[Activity], turma: str) -> list[Path]:
-    """Write output/<turma>/projeto/, overwritten on every run — this is the
-    current state of the module's artifacts, not a history of past runs.
+def write_project_md(activities: list[Activity], turma: str, output_dir: Path | None = None) -> list[Path]:
+    """Write <output_dir>/<turma>/projeto/ (output_dir defaults to OUTPUT_DIR),
+    overwritten on every run — this is the current state of the module's
+    artifacts, not a history of past runs.
 
     Produces one file per sprint (sprint-1.md, sprint-2.md, ...) plus a single
     consolidated projeto.md with every sprint together.
@@ -35,7 +36,7 @@ def write_project_md(activities: list[Activity], turma: str) -> list[Path]:
     for a in artifacts:
         grouped[a.folder_number].append(a)
 
-    project_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA) / "projeto"
+    project_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA) / "projeto"
     project_dir.mkdir(parents=True, exist_ok=True)
 
     header = ["# Projeto", f"> Gerado em: {date.today().isoformat()}", "", "---", ""]

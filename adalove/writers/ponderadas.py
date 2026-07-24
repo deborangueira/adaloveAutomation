@@ -32,8 +32,9 @@ def _build_week_section(week_num: int, ponderadas: list[Activity]) -> list[str]:
     return lines
 
 
-def write_ponderadas_md(activities: list[Activity], turma: str) -> list[Path]:
-    """Write output/<turma>/ponderadas/, overwritten on every run.
+def write_ponderadas_md(activities: list[Activity], turma: str, output_dir: Path | None = None) -> list[Path]:
+    """Write <output_dir>/<turma>/ponderadas/ (output_dir defaults to
+    OUTPUT_DIR), overwritten on every run.
 
     Produces one file per week that actually has a graded self-study
     (semana-01.md, semana-02.md, ...) — weeks with none are skipped, no
@@ -46,7 +47,7 @@ def write_ponderadas_md(activities: list[Activity], turma: str) -> list[Path]:
     for a in ponderadas:
         grouped[a.folder_number].append(a)
 
-    ponderadas_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA) / "ponderadas"
+    ponderadas_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA) / "ponderadas"
     ponderadas_dir.mkdir(parents=True, exist_ok=True)
 
     header = ["# Ponderadas", f"> Gerado em: {date.today().isoformat()}", "", "---", ""]

@@ -25,11 +25,13 @@ def write_subject_links_md(
     activities: list[Activity],
     teacher_subjects: dict[str, str],
     turma: str,
+    output_dir: Path | None = None,
 ) -> list[Path]:
     """Write one .md per subject with all links; Sophia/biblioteca links in a separate section.
 
-    Lands in output/<turma>/prova/, overwritten on every run — this is a
-    current snapshot of the module, not a history of past runs.
+    Lands in <output_dir>/<turma>/prova/ (output_dir defaults to OUTPUT_DIR),
+    overwritten on every run — this is a current snapshot of the module, not
+    a history of past runs.
     """
     today = date.today().isoformat()
 
@@ -39,7 +41,7 @@ def write_subject_links_md(
         if subject and subject != "Não presente no módulo":
             by_subject[subject].append(a)
 
-    run_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA) / "prova"
+    run_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA) / "prova"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     paths: list[Path] = []

@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import math
 from pathlib import Path
@@ -112,6 +113,47 @@ def _err(msg: str) -> None:
 
 def _info(msg: str) -> None:
     console.print(f"  [dim]•[/dim]  {msg}")
+
+
+# ── extra destination folder ─────────────────────────────────────────────────
+
+_OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
+
+
+def _pick_destination_folder() -> Path | None:
+    """Open macOS's native folder picker and return the chosen path, or None
+    if the user cancels. Uses `osascript` (AppleScript) — no extra dependency,
+    and more reliable across Python builds than tkinter's file dialogs."""
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", 'POSIX path of (choose folder with prompt "Selecione a pasta de destino")'],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return Path(result.stdout.strip())
+
+
+def _choose_output_dir() -> Path:
+    """Ask where this export's files should be written — falls back to the
+    project's own output/ folder if the user cancels the picker. Writing
+    directly to the chosen folder (instead of writing to output/ and copying
+    afterwards) avoids keeping two copies in sync."""
+    console.print()
+    _info("Selecione a pasta de destino (cancele para usar a pasta padrão output/)...")
+    return _pick_destination_folder() or _OUTPUT_ROOT
+
+
+def _reveal_in_finder(path: Path) -> None:
+    """Open the given folder in Finder once an export finishes."""
+    try:
+        subprocess.run(["open", str(path)], check=False)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
 
 
 # ── dashboard helpers ─────────────────────────────────────────────────────────
@@ -689,7 +731,8 @@ def subject_export() -> None:
 
     _section("Resultados")
 
-    paths = write_subject_links_md(filtered, teacher_subjects, section.section_caption)
+    output_dir = _choose_output_dir()
+    paths = write_subject_links_md(filtered, teacher_subjects, section.section_caption, output_dir)
 
     if not paths:
         _info("Nenhuma atividade com disciplina mapeada encontrada.")
@@ -698,6 +741,8 @@ def subject_export() -> None:
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
     console.print()
+
+    _reveal_in_finder(paths[0].parent)
 
 
 # ── project export ────────────────────────────────────────────────────────────
@@ -743,11 +788,14 @@ def project_export() -> None:
         _info("Nenhum artefato de projeto encontrado nesta turma.")
         return
 
-    paths = write_project_md(activities, section.section_caption)
+    output_dir = _choose_output_dir()
+    paths = write_project_md(activities, section.section_caption, output_dir)
     _ok(f"{len(artifacts)} artefatos encontrados.")
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
     console.print()
+
+    _reveal_in_finder(paths[0].parent)
 
 
 # ── ponderadas export ─────────────────────────────────────────────────────────
@@ -792,11 +840,14 @@ def ponderadas_export() -> None:
         _info("Nenhuma atividade ponderada encontrada nesta turma.")
         return
 
-    paths = write_ponderadas_md(activities, section.section_caption)
+    output_dir = _choose_output_dir()
+    paths = write_ponderadas_md(activities, section.section_caption, output_dir)
     _ok(f"{len(ponderadas)} atividades ponderadas encontradas.")
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
     console.print()
+
+    _reveal_in_finder(paths[0].parent)
 
 
 # ── calendário export ─────────────────────────────────────────────────────────
@@ -843,10 +894,13 @@ def calendario_export() -> None:
         _info("Nenhum encontro encontrado nesta turma.")
         return
 
-    path = write_calendario_md(activities, section.section_caption, teacher_subjects)
+    output_dir = _choose_output_dir()
+    path = write_calendario_md(activities, section.section_caption, teacher_subjects, output_dir)
     _ok(f"{len(encontros)} encontros encontrados.")
     _ok(f"[bold]{path}[/bold]")
     console.print()
+
+    _reveal_in_finder(path.parent)
 
 
 # ── gerar tudo (turma) ────────────────────────────────────────────────────────
@@ -890,22 +944,24 @@ def gerar_tudo_turma() -> None:
 
     _section("Resultados")
 
+    output_dir = _choose_output_dir()
+
     encontros = get_encontros(activities)
     if encontros:
-        path = write_calendario_md(activities, section.section_caption, teacher_subjects)
+        path = write_calendario_md(activities, section.section_caption, teacher_subjects, output_dir)
         _ok(f"Calendário  —  {len(encontros)} encontros  —  [bold]{path}[/bold]")
     else:
         _info("Calendário  —  nenhum encontro encontrado.")
 
     artifacts = get_project_artifacts(activities)
     if artifacts:
-        paths = write_project_md(activities, section.section_caption)
+        paths = write_project_md(activities, section.section_caption, output_dir)
         _ok(f"Projeto     —  {len(artifacts)} artefatos  —  {len(paths)} arquivos")
     else:
         _info("Projeto     —  nenhum artefato encontrado.")
 
     prova_filtered = [a for a in activities if a.folder_number in _MODO_PROVA_WEEKS]
-    prova_paths = write_subject_links_md(prova_filtered, teacher_subjects, section.section_caption)
+    prova_paths = write_subject_links_md(prova_filtered, teacher_subjects, section.section_caption, output_dir)
     if prova_paths:
         _ok(f"Prova       —  {len(prova_paths)} arquivos")
     else:
@@ -913,12 +969,14 @@ def gerar_tudo_turma() -> None:
 
     ponderadas = get_ponderadas(activities)
     if ponderadas:
-        paths = write_ponderadas_md(activities, section.section_caption)
+        paths = write_ponderadas_md(activities, section.section_caption, output_dir)
         _ok(f"Ponderadas  —  {len(ponderadas)} atividades  —  {len(paths)} arquivos")
     else:
         _info("Ponderadas  —  nenhuma atividade ponderada encontrada.")
 
     console.print()
+
+    _reveal_in_finder(output_dir / section.section_caption)
 
 
 # ── fetch ─────────────────────────────────────────────────────────────────────
@@ -1032,8 +1090,10 @@ def fetch() -> None:
 
     _info(f"{len(filtered)} atividades encontradas.")
 
+    output_dir = _choose_output_dir()
     paths = write_fetch_md(
-        filtered, teacher_subjects, selected_week_nums, selected_subjects, section.section_caption, content_mode
+        filtered, teacher_subjects, selected_week_nums, selected_subjects, section.section_caption,
+        content_mode, output_dir,
     )
 
     if not paths:
@@ -1044,6 +1104,8 @@ def fetch() -> None:
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
     console.print()
+
+    _reveal_in_finder(paths[0].parent)
 
 
 if __name__ == "__main__":

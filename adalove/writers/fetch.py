@@ -81,10 +81,11 @@ def write_fetch_md(
     selected_subjects: list[str],
     turma: str,
     mode: str = MODE_COMPLETO,
+    output_dir: Path | None = None,
 ) -> list[Path]:
-    """Write one output/<turma>/buscar/<disciplina>_semana-<semanas>_<modo>.md
-    per selected subject — multiple weeks land in the same file, but each
-    subject gets its own.
+    """Write one <output_dir>/<turma>/buscar/<disciplina>_semana-<semanas>_<modo>.md
+    per selected subject (output_dir defaults to OUTPUT_DIR) — multiple weeks
+    land in the same file, but each subject gets its own.
 
     `mode` controls what each card shows:
       - MODE_LINK: just a link list, no professor/description at all.
@@ -104,7 +105,7 @@ def write_fetch_md(
         if subject:
             by_subject[subject].append(a)
 
-    buscar_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA) / "buscar"
+    buscar_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA) / "buscar"
     buscar_dir.mkdir(parents=True, exist_ok=True)
 
     paths: list[Path] = []

@@ -60,9 +60,11 @@ def write_calendario_md(
     activities: list[Activity],
     turma: str,
     teacher_subjects: dict[str, str],
+    output_dir: Path | None = None,
 ) -> Path:
-    """Write a single output/<turma>/calendario.md, grouped by sprint (each
-    spanning two weeks) — overwritten on every run.
+    """Write a single <output_dir>/<turma>/calendario.md (output_dir defaults
+    to OUTPUT_DIR), grouped by sprint (each spanning two weeks) — overwritten
+    on every run.
 
     "Instrução" meetings show the discipline directly (Programação, UX, ...),
     each with its own fixed color; "Projeto" meetings aren't tied to one
@@ -86,7 +88,7 @@ def write_calendario_md(
 
     all_sprints = sorted(set(encontros_by_sprint) | set(ponderadas_by_sprint))
 
-    turma_dir = OUTPUT_DIR / (turma or _UNKNOWN_TURMA)
+    turma_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA)
     turma_dir.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = [
