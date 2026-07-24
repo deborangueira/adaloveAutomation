@@ -4,15 +4,9 @@ A Adalove concentra todas as informações acadêmicas do módulo, mas nem sempr
 
 Foi dessa necessidade que surgiu o **Adalove CLI**. No começo, a ideia era simplesmente facilitar meu próprio planejamento de estudos, reunindo os materiais para a prova e me dando uma visão mais clara da carga de cada sprint. Com o tempo, outras funcionalidades foram sendo adicionadas, transformando a ferramenta em um apoio para acompanhar o módulo de forma mais simples.
 
-Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada, organizada e fácil de consultar. Em poucos segundos, você consegue gerar:
+Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada e organizada. Em poucos segundos, você consegue gerar, por exemplo, o **Calendário de aulas e ponderadas**, separado por sprint, **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova, e a **Lista de todos os artefatos do projeto**, organizada por sprint. Todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em diferentes ferramentas como Notion, Obsidian, Claude, etc.
 
-* **Calendário de aulas e ponderadas**, separado por sprint.
-* **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova.
-* **Lista de todos os artefatos do projeto**, organizada por sprint.
-* **Resumo do progresso acadêmico**, com frequência, nota acumulada e nota necessária na prova.
-
-Fora o resumo do Dashboard, que aparece direto no terminal, todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em ferramentas como Notion, Obsidian ou qualquer editor de texto.
-
+![Adalove CLI em execução](images/Captura%20de%20Tela%202026-07-24%20às%2013.57.34.png)
 
 ## O que você consegue fazer
 
