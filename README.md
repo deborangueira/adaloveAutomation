@@ -53,16 +53,22 @@ Na primeira execução, escolha **Setup**. A partir daí, é só abrir `adalove`
 
 ## Como as atividades são identificadas e classificadas
 
-O sistema tem acesso a todos os cards da turma, mas existe a necessidade de identificar que card é de que tipo de atividade. Nesse processo identifiquei que a API da Adalove mostra apenas um campo numérico `type`, sem rótulo nenhum. A confiança no output, contudo, vem de uma descoberta empírica que uniu evidências de vários lugares: a legenda dos próprios cards (todo card com "Autoestudo" no título era sempre `type 11`), as datas reais dos encontros no calendário da Adalove (que bateram exatamente com `type 1` e `type 2`), e o badge "Atividade ponderada: X pontos" que a interface mostra pra cada nota (confirmando o `gradeWeight`). Cruzando essas pistas cheguei nos quatro valores abaixo.
+Depois da autenticação, todos os dados vêm de uma única requisição HTTP a um endpoint REST da API (`apiv2.inteli.edu.br/.../userdata`), que devolve um JSON puro contendo, no campo `activities`, uma lista única com todas as atividades do módulo (aulas, autoestudos, ponderadas, artefatos de projeto, encontros), tudo misturado, sem nenhum campo que diga explicitamente "isso é uma ponderada" ou "isso é um encontro". 
+
+Por isso surgiu a necessidade de procurar, entre os campos brutos que cada atividade traz, um identificador confiável que separe os tipos entre si. Encontrei esse identificador no campo numérico `type`, mas ele vem sem rótulo nenhum e precisei criar critérios que fossem confiáveis o suficiente para categorizar as atividades corretamente. 
+
+A confiança no output vem, portanto, de uma descoberta empírica que uniu evidências de vários lugares: a legenda dos próprios cards evidenciou o `type 11` (todo card com "Autoestudo" no título era sempre desse tipo), e o badge "Atividade ponderada: X pontos" que a interface mostra pra cada nota evidenciou o `gradeWeight` como critério complementar para separar os autoestudos ponderados dos não ponderados. Além disso, a presença de datas foi o diferencial que separou os cards de encontro de todos os outros, sendo eles identificados com `type 1` ou `type 2`. 
+
+Cruzando essas pistas, cheguei aos quatro valores abaixo.
 
 | Identificação | Classificação | Utilizado no menu em |
 |---|---|---|
-| `type == 1` | **Encontro de projeto** | Material › Calendário e Exportar tudo |
-| `type == 2` | **Encontro de instrução** | Material › Calendário, Material › Prova (seção Instruções, agrupada por sprint) e Exportar tudo |
+| `type == 1` | Encontro de **projeto** | Material › Calendário e Exportar tudo |
+| `type == 2` | Encontro de **instrução** | Material › Calendário, Material › Prova (seção Instruções, agrupada por sprint) e Exportar tudo |
 | `type == 11` e `gradeWeight > 0` | **Ponderadas** | Material › Ponderadas, Material › Calendário, Material › Buscar (marca "(Ponderada)" nos resultados), Exportar tudo e Dashboard |
 | `type == 11` e `gradeWeight <= 0` | **Autoestudo** | Material › Prova (seção Autoestudo), Exportar tudo e Dashboard |
 
-Qualquer alteração não documentada da Adalove nesses valores pode quebrar essa classificação sem aviso e gerar outputs incorretos.
+Qualquer alteração não documentada que a Adalove fizer nesses valores pode quebrar essa classificação sem aviso e gerar outputs incorretos. Por isso, no caso de inconsistência, sugiro fazer a checagem desses identificadores.
 
 ## Credenciais: como funciona por baixo dos panos
 
