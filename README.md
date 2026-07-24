@@ -1,17 +1,19 @@
 # Adalove CLI
 
-Uma ferramenta de linha de comando que conecta direto na API da **Adalove** e transforma o que você já vê na plataforma em um matérial único que facilita a consulta das informações do módulo atual. O objetivo é tornar extremamente fácil a organização pessoal do seu Notion, calendário ou listas de links de autoestudo. 
 
-## Por que isso existe
+A Adalove concentra todas as informações acadêmicas do módulo, mas nem sempre é fácil enxergar o panorama completo. Se você quiser organizar seu calendário, entender quais sprints vão exigir mais tempo ou simplesmente levar essas informações para o Notion, por exemplo, acaba precisando navegar por dezenas de cards e copiar tudo manualmente.
 
-A vontade de criar algo assim surgiu do trabalho que senti ao organizar o material de um módulo: buscar os cards e copiar/colar suas informações é um trabalho repetitivo e cansativo.Esse CLI automatiza tudo isso. Você roda um comando, escolhe uma opção no menu, e em segundos tem:
+Foi dessa necessidade que surgiu o **Adalove CLI**. No começo, a ideia era simplesmente facilitar meu próprio planejamento de estudos, reunindo os materiais para a prova e me dando uma visão mais clara da carga de cada sprint. Com o tempo, outras funcionalidades foram sendo adicionadas, transformando a ferramenta em um apoio para acompanhar o módulo de forma mais simples.
 
-- **O calendário de aulas e ponderadas separados por sprint**
-- **Todos os assuntos e lista de links de autoestudos das 8 primeiras semanas para estudar para a prova**
-- **Lista de todos os artefatos do projeto organizados por sprint**
-- **Um resumo do seu progresso acadêmico** direto no terminal (frequência, nota acumulada, nota necessária na prova).
+Esse CLI, portanto, se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada, organizada e fácil de consultar. Em poucos segundos, você consegue gerar:
 
-Todas as informações que geram output são exportadas para uma pasta de sua escolha no seu computador.
+* **Calendário de aulas e ponderadas**, separado por sprint.
+* **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova.
+* **Lista de todos os artefatos do projeto**, organizada por sprint.
+* **Resumo do progresso acadêmico**, com frequência, nota acumulada e nota necessária na prova.
+
+Todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em ferramentas como Notion, Obsidian ou qualquer editor de texto.
+
 
 ## O que você consegue fazer
 
