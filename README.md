@@ -14,10 +14,10 @@ Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas infor
 |---|---|---|
 | **Turma** | Turma, módulo e professores | só terminal |
 | **Exportar tudo** | Gera de uma vez as opções com \* abaixo| conjunto completo |
-| **Material › Calendário** \* | Encontros e ponderadas organizados por sprint | Um arquivo |
+| **Material › Calendário** \* | Resumo do módulo por semana (ponderadas + composição por disciplina) + encontros por sprint | Um arquivo |
 | **Material › Projeto** \* | Todos os artefatos do projeto | 6 arquivos (por sprint + unificado) |
 | **Material › Prova** \* | Assuntos e links das 8 primeiras semanas | 5 arquivos (por disciplina) |
-| **Material › Ponderadas** \* | Todas as ponderadas | por semana + unificado |
+| **Material › Ponderadas** \* | Todas as ponderadas | Um arquivo |
 | **Material › Buscar** | Filtro livre por semana/disciplina | por disciplina |
 | **Dashboard** | Progresso acadêmico | só terminal |
 | **Setup** | Credenciais e disciplinas | - |
@@ -97,7 +97,6 @@ output/
       matemática.md, programação.md, ...
     ponderadas/              # Material › Ponderadas
       ponderadas.md
-      semana-01.md, semana-02.md, ...
     buscar/                  # Material › Buscar
       <disciplina>_semana-<semanas>_<modo>.md
 ```

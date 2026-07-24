@@ -844,7 +844,7 @@ def project_export() -> None:
 # ── ponderadas export ─────────────────────────────────────────────────────────
 
 def ponderadas_export() -> None:
-    """Gera um .md por semana com atividades ponderadas, mais um consolidado."""
+    """Gera um único .md com o detalhe de todas as ponderadas da turma, por semana."""
     _section("Carregando")
 
     try:
@@ -884,13 +884,12 @@ def ponderadas_export() -> None:
         return
 
     output_dir = _choose_output_dir()
-    paths = write_ponderadas_md(activities, section.section_caption, output_dir)
+    path = write_ponderadas_md(activities, section.section_caption, output_dir)
     _ok(f"{len(ponderadas)} atividades ponderadas encontradas.")
-    for p in paths:
-        _ok(f"[bold]{p}[/bold]")
+    _ok(f"[bold]{path}[/bold]")
     console.print()
 
-    _reveal_in_finder(paths[0].parent)
+    _reveal_in_finder(path.parent)
 
 
 # ── calendário export ─────────────────────────────────────────────────────────
@@ -1012,8 +1011,8 @@ def gerar_tudo_turma() -> None:
 
     ponderadas = get_ponderadas(activities)
     if ponderadas:
-        paths = write_ponderadas_md(activities, section.section_caption, output_dir)
-        _ok(f"Ponderadas  —  {len(ponderadas)} atividades  —  {len(paths)} arquivos")
+        path = write_ponderadas_md(activities, section.section_caption, output_dir)
+        _ok(f"Ponderadas  —  {len(ponderadas)} atividades  —  [bold]{path}[/bold]")
     else:
         _info("Ponderadas  —  nenhuma atividade ponderada encontrada.")
 
