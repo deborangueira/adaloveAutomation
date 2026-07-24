@@ -105,9 +105,9 @@ def test_ponderadas_semana_zero_when_none_this_week():
 
 def test_auto_estudos_feitos_counts_status_3():
     acts = [
-        _activity(type=2, status=3),
-        _activity(type=2, status=3),
-        _activity(type=2, status=1),
+        _activity(type=11, grade_weight=0, status=3),
+        _activity(type=11, grade_weight=0, status=3),
+        _activity(type=11, grade_weight=0, status=1),
     ]
     metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
     assert metrics.auto_estudos_feitos == 2
@@ -115,16 +115,24 @@ def test_auto_estudos_feitos_counts_status_3():
 
 def test_auto_estudos_a_fazer_counts_non_3():
     acts = [
-        _activity(type=2, status=1),
-        _activity(type=2, status=2),
-        _activity(type=2, status=3),
+        _activity(type=11, grade_weight=0, status=1),
+        _activity(type=11, grade_weight=0, status=2),
+        _activity(type=11, grade_weight=0, status=3),
     ]
     metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
     assert metrics.auto_estudos_a_fazer == 2
 
 
 def test_auto_estudos_ignores_other_types():
-    acts = [_activity(type=11, status=3), _activity(type=21, status=3)]
+    acts = [_activity(type=2, status=3), _activity(type=21, status=3)]
+    metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
+    assert metrics.auto_estudos_feitos == 0
+    assert metrics.auto_estudos_a_fazer == 0
+
+
+def test_auto_estudos_excludes_ponderadas():
+    """type 11 with a grade weight is a ponderada, not an ungraded autoestudo."""
+    acts = [_activity(type=11, grade_weight=3, status=3)]
     metrics = DashboardMetrics.from_api(_status(), acts, _section_date(0))
     assert metrics.auto_estudos_feitos == 0
     assert metrics.auto_estudos_a_fazer == 0

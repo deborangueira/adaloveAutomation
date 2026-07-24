@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from adalove.filters.activity import get_ponderadas
+from adalove.filters.activity import get_autoestudos, get_ponderadas
 from adalove.models.activity import Activity
 from adalove.models.student_status import StudentStatus
 
@@ -29,7 +29,7 @@ class DashboardMetrics:
         semana_atual = _compute_week(section_date_str)
         ponderadas = get_ponderadas(activities)
         artefatos = [a for a in activities if a.type == 21]
-        auto_estudos = [a for a in activities if a.type == 2]
+        auto_estudos = get_autoestudos(activities)
 
         acumulada = student_status.done_evaluation_result
         nota_necessaria = (_PASSING_GRADE - acumulada * (1 - _PROVA_SHARE)) / _PROVA_SHARE

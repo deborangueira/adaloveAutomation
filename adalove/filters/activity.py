@@ -100,6 +100,13 @@ def get_ponderadas(activities: list[Activity]) -> list[Activity]:
     return [a for a in activities if a.type == _PONDERADA_TYPE and a.grade_weight > 0]
 
 
+def get_autoestudos(activities: list[Activity]) -> list[Activity]:
+    """Return the ungraded self-studies — same "Autoestudo" category (type 11)
+    as get_ponderadas, but without a grade weight. The two are complementary:
+    every type-11 card is either here or in get_ponderadas, never both."""
+    return [a for a in activities if a.type == _PONDERADA_TYPE and a.grade_weight <= 0]
+
+
 def get_encontros(activities: list[Activity]) -> list[Activity]:
     """Return the turma's calendar meetings (Encontro de Instrução/Orientação),
     sorted chronologically by date."""
