@@ -1,35 +1,34 @@
 # Adalove CLI
 
-
 A Adalove concentra todas as informações acadêmicas do módulo, mas nem sempre é fácil enxergar o panorama completo. Se você quiser organizar seu calendário, entender quais sprints vão exigir mais tempo ou simplesmente levar essas informações para o Notion, por exemplo, acaba precisando navegar por dezenas de cards e copiar tudo manualmente.
 
 Foi dessa necessidade que surgiu o **Adalove CLI**. No começo, a ideia era simplesmente facilitar meu próprio planejamento de estudos, reunindo os materiais para a prova e me dando uma visão mais clara da carga de cada sprint. Com o tempo, outras funcionalidades foram sendo adicionadas, transformando a ferramenta em um apoio para acompanhar o módulo de forma mais simples.
 
-Esse CLI, portanto, se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada, organizada e fácil de consultar. Em poucos segundos, você consegue gerar:
+Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada, organizada e fácil de consultar. Em poucos segundos, você consegue gerar:
 
 * **Calendário de aulas e ponderadas**, separado por sprint.
 * **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova.
 * **Lista de todos os artefatos do projeto**, organizada por sprint.
 * **Resumo do progresso acadêmico**, com frequência, nota acumulada e nota necessária na prova.
 
-Todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em ferramentas como Notion, Obsidian ou qualquer editor de texto.
+Fora o resumo do Dashboard, que aparece direto no terminal, todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em ferramentas como Notion, Obsidian ou qualquer editor de texto.
 
 
 ## O que você consegue fazer
 
-| Opção do menu | O que gera |
-|---|---|
-| **Turma** | Mostra a turma, módulo e professores da sessão atual — pra você confirmar que está vendo os dados certos antes de exportar qualquer coisa. |
-| **Exportar tudo** | Gera Calendário, Projeto, Prova e Ponderadas de uma vez só, numa única busca. |
-| **Material › Calendário** | Todos os encontros da turma (aulas e encontros de projeto), agrupados por sprint, com a disciplina de cada aula colorida e as ponderadas daquela sprint listadas junto. |
-| **Material › Projeto** | Os artefatos de "Desenvolvimento de Projeto" — um arquivo por sprint, mais um consolidado com tudo. |
-| **Material › Prova** | Um arquivo por disciplina com os assuntos e links das 8 primeiras semanas — ideal pra revisar antes da prova do módulo. |
-| **Material › Ponderadas** | As atividades que valem nota (professor, peso e critério de avaliação), separadas por semana, mais um consolidado. |
-| **Material › Buscar** | Filtro livre por semana(s) e disciplina(s), com três formatos de saída (só link, só descrição, ou os dois juntos). |
-| **Dashboard** | Resumo do progresso no terminal: nota acumulada, nota até o momento, nota necessária na prova, semana atual e frequência (com gráfico de pizza em ASCII). |
-| **Setup** | Configura suas credenciais e o mapeamento de professor → disciplina. Normalmente você só faz isso uma vez. |
+| Opção do menu | O que gera | Output |
+|---|---|---|
+| **Turma** | Turma, módulo e professores | só terminal |
+| **Exportar tudo** | Gera de uma vez as opções com \* abaixo| conjunto completo |
+| **Material › Calendário** \* | Encontros e ponderadas organizados por sprint | Um arquivo |
+| **Material › Projeto** \* | Todos os artefatos do projeto | 6 arquivos (por sprint + unificado) |
+| **Material › Prova** \* | Assuntos e links das 8 primeiras semanas | 5 arquivos (por disciplina) |
+| **Material › Ponderadas** \* | Todas as ponderadas | por semana + unificado |
+| **Material › Buscar** | Filtro livre por semana/disciplina | por disciplina |
+| **Dashboard** | Progresso acadêmico | só terminal |
+| **Setup** | Credenciais e disciplinas | - |
 
-Em qualquer exportação, o CLI abre um seletor de pasta nativo do macOS perguntando onde salvar os arquivos — se você cancelar, ele usa a pasta `output/` do próprio projeto. Ao final, a pasta escolhida já abre sozinha no Finder.
+Em qualquer exportação, o CLI abre um seletor de pasta nativo do macOS perguntando onde salvar os arquivos, se você cancelar, ele usa a pasta `output/` do próprio projeto. Ao final, a pasta escolhida já abre sozinha no Finder.
 
 ## Instalação
 
@@ -134,4 +133,4 @@ pytest -q
 
 ## Créditos
 
-Este projeto foi desenvolvido a partir da base disponibilizada por _Rafael Josué_ em um repositório público próprio, que implementava a estrutura inicial do CLI (cliente da API, filtros e modelos) e o processo de captura de credenciais utilizando Playwright. A partir dessa fundação, expandi a solução, desenvolvendo a automação e as funcionalidades que compõem a versão atual do projeto.
+Este projeto foi desenvolvido a partir da base disponibilizada por **Rafael Josué** em um repositório público próprio, que implementava a estrutura inicial do CLI (cliente da API, filtros e modelos) e o processo de captura de credenciais utilizando Playwright. A partir dessa fundação, expandi a solução, desenvolvendo a automação e as funcionalidades que compõem a versão atual do projeto.
