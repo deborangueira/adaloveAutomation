@@ -17,6 +17,16 @@ _PROJECT_ARTIFACT_TYPE = 21
 # exactly the graded-deliverable self-studies, no more and no less.
 _PONDERADA_TYPE = 11
 
+# 1 and 2 are the turma's calendar meetings — confirmed empirically against
+# the Adalove UI by matching real cards' dates: type 1 is "Encontro de
+# Orientação" in the Adalove UI (project-focused, with the advisor), shown
+# here as "Projeto"; type 2 as "Encontro de Instrução" (regular class), shown
+# here as "Instrução".
+ENCONTRO_LABELS = {
+    1: "Projeto",
+    2: "Instrução",
+}
+
 
 def filter_activities(
     activities: list[Activity],
@@ -78,12 +88,22 @@ def get_project_artifacts(activities: list[Activity]) -> list[Activity]:
 
 
 def sprint_number(folder_number: int) -> int:
-    """Semana 02/04/06/08/10 → Sprint 1/2/3/4/5 (delivery lands on the sprint's
-    even-numbered review week)."""
-    return folder_number // 2
+    """Semana 01/02 → Sprint 1, 03/04 → Sprint 2, ... — each sprint spans two
+    weeks. Project deliverables only ever land on the even week of that pair,
+    where this agrees with the simpler `folder_number // 2`."""
+    return (folder_number - 1) // 2 + 1
 
 
 def get_ponderadas(activities: list[Activity]) -> list[Activity]:
     """Return the graded self-study deliverables — Adalove's "Autoestudo"
     category (type 11) that also carries a grade weight."""
     return [a for a in activities if a.type == _PONDERADA_TYPE and a.grade_weight > 0]
+
+
+def get_encontros(activities: list[Activity]) -> list[Activity]:
+    """Return the turma's calendar meetings (Encontro de Instrução/Orientação),
+    sorted chronologically by date."""
+    return sorted(
+        (a for a in activities if a.type in ENCONTRO_LABELS),
+        key=lambda a: a.date,
+    )

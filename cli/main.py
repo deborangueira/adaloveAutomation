@@ -30,12 +30,14 @@ from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import (
     filter_activities,
+    get_encontros,
     get_ponderadas,
     get_project_artifacts,
     get_unique_teachers,
     get_unique_weeks,
     infer_teacher_subjects,
 )
+from adalove.writers.calendario import write_calendario_md
 from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
 from adalove.writers.ponderadas import write_ponderadas_md
 from adalove.writers.project import write_project_md
@@ -350,6 +352,7 @@ def main(ctx: typer.Context) -> None:
             "Escolha uma opção:",
             choices=[
                 questionary.Choice("  Turma      —  Ver turma e professores da sessão atual",            value="turma"),
+                questionary.Choice("  Calendário —  Todos os encontros da turma",            value="calendario"),
                 questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",            value="ponderadas"),
                 questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                    value="project"),
                 questionary.Choice("  Prova      —  Todos os Autoestudos da prova", value="subject"),
@@ -377,6 +380,8 @@ def main(ctx: typer.Context) -> None:
                 dashboard()
             elif choice == "ponderadas":
                 ponderadas_export()
+            elif choice == "calendario":
+                calendario_export()
             elif choice == "turma":
                 turma_info()
         except typer.Exit:
@@ -757,6 +762,56 @@ def ponderadas_export() -> None:
     _ok(f"{len(ponderadas)} atividades ponderadas encontradas.")
     for p in paths:
         _ok(f"[bold]{p}[/bold]")
+    console.print()
+
+
+# ── calendário export ─────────────────────────────────────────────────────────
+
+def calendario_export() -> None:
+    """Gera um único .md com todos os encontros da turma (Instrução e Orientação)."""
+    _section("Carregando")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
+
+    console.print("  Buscando atividades...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        section, activities = client.fetch_section_overview()
+    except KeyError as e:
+        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
+        return
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            teacher_subjects = config.get("teacher_subjects", {})
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            section, activities = client.fetch_section_overview()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    _ok(f"{len(activities)} atividades carregadas.")
+
+    _section("Resultados")
+
+    encontros = get_encontros(activities)
+    if not encontros:
+        _info("Nenhum encontro encontrado nesta turma.")
+        return
+
+    path = write_calendario_md(activities, section.section_caption, teacher_subjects)
+    _ok(f"{len(encontros)} encontros encontrados.")
+    _ok(f"[bold]{path}[/bold]")
     console.print()
 
 

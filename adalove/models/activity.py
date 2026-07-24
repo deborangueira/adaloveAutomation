@@ -93,6 +93,7 @@ class Activity:
     axis_caption: str = ""
     description_markdown: str = ""
     avaliacao_markdown: str = ""
+    date: str = ""
 
     @property
     def is_ponderada(self) -> bool:
@@ -119,4 +120,5 @@ class Activity:
             axis_caption=data.get("axisCaption") or "",
             description_markdown=html_to_markdown(data.get("description")),
             avaliacao_markdown=html_to_markdown(data.get("studyQuestion")),
+            date=data.get("date") or "",
         )

@@ -19,3 +19,15 @@ AXIS_TO_SUBJECT: dict[str, str] = {
     "UEX": "UX",
     "LID": "Liderança",
 }
+
+# Fixed categorical hues (validated for colorblind-safe adjacent contrast),
+# one per subject, kept in this order everywhere a subject gets a color —
+# never reassigned when the set of subjects present changes.
+SUBJECT_COLORS: dict[str, str] = {
+    "Matemática": "#2a78d6",
+    "UX": "#eb6834",
+    "Programação": "#1baf7a",
+    "Negócios": "#eda100",
+    "Liderança": "#e87ba4",
+    "Orientação": "#008300",
+}
