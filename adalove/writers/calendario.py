@@ -119,7 +119,7 @@ def write_calendario_md(
             lines.append("")
             for a in sprint_ponderadas:
                 subject = subjects_by_teacher.get(a.professor_name, "") or a.professor_name
-                lines.append(f"- {_colored(subject)} — {a.grade_weight} pontos")
+                lines.append(f"- {_colored(subject)} — {a.grade_weight} pontos — Semana {a.folder_number:02d}")
             lines.append("")
 
     path = turma_dir / "calendario.md"
