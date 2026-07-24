@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from adalove.filters.activity import get_ponderadas
 from adalove.models.activity import Activity
 from adalove.models.student_status import StudentStatus
 
@@ -26,7 +27,7 @@ class DashboardMetrics:
         section_date_str: str,
     ) -> "DashboardMetrics":
         semana_atual = _compute_week(section_date_str)
-        ponderadas = [a for a in activities if a.type == 11 and a.grade_weight > 0]
+        ponderadas = get_ponderadas(activities)
         artefatos = [a for a in activities if a.type == 21]
         auto_estudos = [a for a in activities if a.type == 2]
 
