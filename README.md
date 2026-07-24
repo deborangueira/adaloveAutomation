@@ -132,4 +132,4 @@ pytest -q
 
 ## Créditos
 
-Este projeto aproveitou o trabalho desenvolvido e disponibilizado pelo **Rafael Josué** num repositório público que estruturava a base do CLI (cliente da API, filtros, modelos) e a captura de credenciais via Playwright. Esse trabalho inicial foi o pontapé pra toda a automação construída depois por **Débora Nogueira**.
+Este projeto foi desenvolvido a partir da base disponibilizada por _Rafael Josué_ em um repositório público próprio, que implementava a estrutura inicial do CLI (cliente da API, filtros e modelos) e o processo de captura de credenciais utilizando Playwright. A partir dessa fundação, expandi a solução, desenvolvendo a automação e as funcionalidades que compõem a versão atual do projeto.
