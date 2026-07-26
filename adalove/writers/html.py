@@ -465,16 +465,32 @@ main { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
 .section h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
 .section h3 { font-size: .95rem; margin: 1.25rem 0 .5rem; }
 .scroll-x { overflow-x: auto; }
-table.resumo { border-collapse: collapse; width: 100%; font-size: .82rem; }
-table.resumo th, table.resumo td {
-  border: 1px solid var(--border); padding: .4rem .55rem; text-align: left; vertical-align: top; white-space: nowrap;
+.week-summary { display: flex; flex-direction: column; }
+.week-summary-header, .week-row {
+  display: grid; grid-template-columns: 2.2rem 5.75rem 1fr 3.5rem; align-items: center; gap: .6rem;
 }
-table.resumo th { background: var(--bg-alt); font-weight: 600; }
-.resumo-transposed th, .resumo-transposed td { white-space: normal; }
-.resumo-transposed td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.bar { display: flex; width: 90px; height: 12px; border-radius: 3px; overflow: hidden; background: var(--bg-alt); }
-.resumo-transposed .bar { width: 60px; }
+.week-summary-header {
+  color: var(--text-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+  font-weight: 600; padding: 0 .5rem .6rem; border-bottom: 1px solid var(--border);
+}
+.week-summary-header span:last-child, .week-row .artefatos-cell { text-align: right; }
+.week-row {
+  padding: .6rem .5rem; border-bottom: 1px solid var(--border); border-radius: 8px;
+}
+.week-row:last-child { border-bottom: none; }
+.week-row:hover { background: var(--bg-alt); }
+.week-row .ponderadas-cell { display: flex; flex-wrap: wrap; gap: .3rem; }
+.week-row .artefatos-cell { color: var(--text-muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.week-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--bg-alt);
+  color: var(--text-muted); font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.bar { display: flex; width: 56px; height: 10px; border-radius: 999px; overflow: hidden; background: var(--bg-alt); }
 .bar span { height: 100%; }
+.bar span:first-child { border-radius: 999px 0 0 999px; }
+.bar span:last-child { border-radius: 0 999px 999px 0; }
+.bar span:only-child { border-radius: 999px; }
 .badge {
   display: inline-block; padding: .1rem .45rem; border-radius: 999px; font-size: .72rem;
   color: #fff; white-space: nowrap;
@@ -525,7 +541,7 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
   <section class="view" id="view-calendario">
     <div class="section-actions"><button class="export-btn" id="export-calendario">Exportar dados</button></div>
     <div class="split-layout">
-      <div class="scroll-x"><table class="resumo resumo-transposed" id="resumo-table"></table></div>
+      <div class="week-summary" id="resumo-table"></div>
       <div class="split-divider"></div>
       <div class="split-content" id="sprints"></div>
     </div>
@@ -652,17 +668,17 @@ const SUBJECT_ABBR = {
 const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
 (function renderResumo() {
-  const table = document.getElementById('resumo-table');
-  const headRow = el('tr');
-  ['', 'Composição', 'Ponderadas', 'Artefatos'].forEach(h => headRow.appendChild(el('th', null, h)));
-  const thead = el('thead'); thead.appendChild(headRow); table.appendChild(thead);
+  const root = document.getElementById('resumo-table');
 
-  const tbody = el('tbody');
+  const header = el('div', 'week-summary-header');
+  ['', 'Composição', 'Ponderadas', 'Artefatos'].forEach(h => header.appendChild(el('span', null, h)));
+  root.appendChild(header);
+
   DATA.resumo.forEach(w => {
-    const row = el('tr');
-    row.appendChild(el('td', null, String(w.week)));
+    const row = el('div', 'week-row');
+    row.appendChild(el('span', 'week-pill', String(w.week)));
 
-    const compTd = el('td');
+    const compCell = el('div');
     if (w.composicao.length) {
       const bar = el('div', 'bar');
       w.composicao.forEach(seg => {
@@ -672,18 +688,17 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
         s.title = seg.subject;
         bar.appendChild(s);
       });
-      compTd.appendChild(bar);
+      compCell.appendChild(bar);
     }
-    row.appendChild(compTd);
+    row.appendChild(compCell);
 
-    const pondTd = el('td');
-    w.ponderadasSubjects.forEach(s => pondTd.appendChild(badge(subjectAbbr(s), s)));
-    row.appendChild(pondTd);
+    const pondCell = el('div', 'ponderadas-cell');
+    w.ponderadasSubjects.forEach(s => pondCell.appendChild(badge(subjectAbbr(s), s)));
+    row.appendChild(pondCell);
 
-    row.appendChild(el('td', null, w.artifactCount ? String(w.artifactCount) : ''));
-    tbody.appendChild(row);
+    row.appendChild(el('span', 'artefatos-cell', w.artifactCount ? String(w.artifactCount) : '–'));
+    root.appendChild(row);
   });
-  table.appendChild(tbody);
 })();
 
 // ── Sprints (Calendário) ────────────────────────────────────────────────
