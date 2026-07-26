@@ -447,12 +447,12 @@ footer {
   .split-divider { display: none; }
   .split-nav { flex-direction: row; flex-wrap: wrap; }
 }
-.proj-item { margin-bottom: 1.75rem; }
-.proj-item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; margin-bottom: .6rem; }
-.proj-item-head h3 { margin: 0; font-size: 1rem; }
-.proj-item-body { position: relative; max-height: 150px; overflow: hidden; }
-.proj-item-body.expanded { max-height: none; }
-.proj-item-body.collapsible:not(.expanded)::after {
+.list-item { margin-bottom: 1.75rem; }
+.list-item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; margin-bottom: .6rem; }
+.list-item-head h3 { margin: 0; font-size: 1rem; }
+.list-item-body { position: relative; max-height: 150px; overflow: hidden; }
+.list-item-body.expanded { max-height: none; }
+.list-item-body.collapsible:not(.expanded)::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
   background: linear-gradient(to bottom, transparent, var(--bg));
   pointer-events: none;
@@ -499,13 +499,7 @@ main { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
   color: #fff; white-space: nowrap;
 }
 .badge.neutral { background: var(--text-muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; }
-.card {
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
-  padding: .85rem 1rem; box-shadow: var(--shadow);
-}
-.card h3, .card h4 { margin: 0 0 .4rem; font-size: .92rem; }
-.card .meta { color: var(--text-muted); font-size: .78rem; margin: 0 0 .4rem; }
+.meta { color: var(--text-muted); font-size: .78rem; margin: 0 0 .4rem; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
 .card-head h4 { margin: 0; }
 .copy-btn {
@@ -571,7 +565,11 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
     </div>
   </section>
   <section class="view" id="view-ponderadas">
-    <div id="ponderadas"></div>
+    <div class="split-layout">
+      <nav class="split-nav" id="ponderadas-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content" id="ponderadas-content"></div>
+    </div>
   </section>
   <section class="view" id="view-turma">
     <div class="section">
@@ -660,6 +658,25 @@ function downloadText(filename, content) {
   URL.revokeObjectURL(url);
 }
 
+// Only adds the "Ver tudo" toggle (and the fade) when the collapsed body
+// actually clips content — short items stay as-is, nothing to expand. Call
+// this only once the containing tab is visible: a hidden (display:none)
+// ancestor makes scrollHeight/clientHeight both read 0, so the overflow
+// check would always come up empty.
+function makeExpandable(body) {
+  requestAnimationFrame(() => {
+    if (body.scrollHeight <= body.clientHeight + 4) return;
+    body.classList.add('collapsible');
+    const toggle = el('button', 'ver-mais-btn', 'Ver tudo');
+    toggle.type = 'button';
+    toggle.addEventListener('click', () => {
+      const expanded = body.classList.toggle('expanded');
+      toggle.textContent = expanded ? 'Ver menos' : 'Ver tudo';
+    });
+    body.after(toggle);
+  });
+}
+
 document.getElementById('turma-name').textContent = DATA.turma;
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 
@@ -739,27 +756,11 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
     return;
   }
 
-  // Only adds the "Ver tudo" toggle (and the fade) when the collapsed body
-  // actually clips content — short artifacts stay as-is, nothing to expand.
-  function makeExpandable(body) {
-    requestAnimationFrame(() => {
-      if (body.scrollHeight <= body.clientHeight + 4) return;
-      body.classList.add('collapsible');
-      const toggle = el('button', 'ver-mais-btn', 'Ver tudo');
-      toggle.type = 'button';
-      toggle.addEventListener('click', () => {
-        const expanded = body.classList.toggle('expanded');
-        toggle.textContent = expanded ? 'Ver menos' : 'Ver tudo';
-      });
-      body.after(toggle);
-    });
-  }
-
   function renderContent(sprint) {
     contentRoot.innerHTML = '';
     sprint.artifacts.forEach(a => {
-      const item = el('article', 'proj-item');
-      const head = el('div', 'proj-item-head');
+      const item = el('article', 'list-item');
+      const head = el('div', 'list-item-head');
       head.appendChild(el('h3', null, a.caption));
       const copyBtn = el('button', 'copy-btn', 'Copiar');
       copyBtn.type = 'button';
@@ -770,7 +771,7 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
       head.appendChild(copyBtn);
       item.appendChild(head);
 
-      const body = el('div', 'proj-item-body');
+      const body = el('div', 'list-item-body');
       richHtml(body, a.html);
       item.appendChild(body);
       contentRoot.appendChild(item);
@@ -895,24 +896,60 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
 // ── Ponderadas ───────────────────────────────────────────────────────────
 (function renderPonderadas() {
-  const root = document.getElementById('ponderadas');
-  if (!DATA.ponderadas.length) { root.appendChild(el('div', 'empty-state', 'Nenhuma ponderada encontrada.')); return; }
-  DATA.ponderadas.forEach(week => {
-    const section = el('div', 'section');
-    section.appendChild(el('h2', null, `Semana ${String(week.week).padStart(2, '0')}`));
-    const grid = el('div', 'grid');
+  const navRoot = document.getElementById('ponderadas-nav');
+  const contentRoot = document.getElementById('ponderadas-content');
+  if (!DATA.ponderadas.length) {
+    document.querySelector('#view-ponderadas .split-divider').style.display = 'none';
+    contentRoot.appendChild(el('div', 'empty-state', 'Nenhuma ponderada encontrada.'));
+    return;
+  }
+
+  function renderContent(week) {
+    contentRoot.innerHTML = '';
     week.items.forEach(item => {
-      const card = el('article', 'card');
-      card.appendChild(el('h4', null, item.caption));
-      const meta = [];
-      if (item.professor) meta.push(item.professor);
-      meta.push(`${item.weight} pontos`);
-      card.appendChild(el('p', 'meta', meta.join(' — ')));
-      richHtml(card, item.html);
-      grid.appendChild(card);
+      const ponderadaItem = el('article', 'list-item');
+      const head = el('div', 'list-item-head');
+      head.appendChild(el('h3', null, item.caption));
+      const copyBtn = el('button', 'copy-btn', 'Copiar');
+      copyBtn.type = 'button';
+      copyBtn.addEventListener('click', () => {
+        const text = item.html ? `${item.caption}\n\n${plainText(item.html)}` : item.caption;
+        copyText(text, copyBtn);
+      });
+      head.appendChild(copyBtn);
+      ponderadaItem.appendChild(head);
+
+      const metaParts = [];
+      if (item.professor) metaParts.push(item.professor);
+      metaParts.push(`${item.weight} pontos`);
+      ponderadaItem.appendChild(el('p', 'meta', metaParts.join(' — ')));
+
+      const body = el('div', 'list-item-body');
+      richHtml(body, item.html);
+      ponderadaItem.appendChild(body);
+      contentRoot.appendChild(ponderadaItem);
+      makeExpandable(body);
     });
-    section.appendChild(grid);
-    root.appendChild(section);
+  }
+
+  DATA.ponderadas.forEach((week, i) => {
+    const btn = el('button', i === 0 ? 'active' : null, `Semana ${String(week.week).padStart(2, '0')}`);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      renderContent(week);
+    });
+    navRoot.appendChild(btn);
+  });
+
+  // Same reasoning as Projeto: defer the first render until the tab is
+  // actually visible, since makeExpandable's overflow check needs real layout.
+  let initialized = false;
+  document.querySelector('.tab[data-view="ponderadas"]').addEventListener('click', () => {
+    if (!initialized) {
+      initialized = true;
+      renderContent(DATA.ponderadas[0]);
+    }
   });
 })();
 
