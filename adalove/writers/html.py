@@ -16,6 +16,7 @@ from adalove.filters.activity import (
     sprint_number,
 )
 from adalove.models.activity import Activity
+from adalove.models.section_info import SectionInfo
 
 OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
 _UNKNOWN_TURMA = "turma-desconhecida"
@@ -246,6 +247,21 @@ def _build_prova(activities: list[Activity], teacher_subjects: dict[str, str]) -
     return subjects
 
 
+def _build_turma_disciplinas(activities: list[Activity], teacher_subjects: dict[str, str]) -> list[dict]:
+    """Same subject → professor(s) grouping as _build_prova, but over every
+    activity (not just the first 8 weeks) — this feeds the Turma tab, which
+    is about the module's overall structure, not exam scope."""
+    by_subject: dict[str, set[str]] = defaultdict(set)
+    for a in activities:
+        subject = teacher_subjects.get(a.professor_name, "")
+        if subject and subject != "Não presente no módulo" and a.professor_name:
+            by_subject[subject].add(a.professor_name)
+    return [
+        {"subject": subject, "professors": sorted(professors)}
+        for subject, professors in sorted(by_subject.items())
+    ]
+
+
 def _build_ponderadas(ponderadas: list[Activity], subjects_by_teacher: dict[str, str]) -> list[dict]:
     grouped: dict[int, list[Activity]] = defaultdict(list)
     for a in ponderadas:
@@ -272,7 +288,7 @@ def _build_ponderadas(ponderadas: list[Activity], subjects_by_teacher: dict[str,
     ]
 
 
-def _build_data(activities: list[Activity], turma: str, teacher_subjects: dict[str, str]) -> dict:
+def _build_data(activities: list[Activity], section: SectionInfo, teacher_subjects: dict[str, str]) -> dict:
     encontros = get_encontros(activities)
     ponderadas = get_ponderadas(activities)
     artifacts = get_project_artifacts(activities)
@@ -284,9 +300,18 @@ def _build_data(activities: list[Activity], turma: str, teacher_subjects: dict[s
     subjects_by_teacher = {**infer_teacher_subjects(activities), **teacher_subjects}
 
     return {
-        "turma": turma or _UNKNOWN_TURMA,
+        "turma": section.section_caption or _UNKNOWN_TURMA,
         "generatedAt": date.today().isoformat(),
         "subjectColors": SUBJECT_COLORS,
+        "turmaInfo": {
+            "caption": section.section_caption,
+            "moduloCaption": section.project_caption,
+            "moduloDescricao": section.project_description,
+            "orientador": section.advisor_name,
+            "grupo": section.group_caption,
+            "dataSessao": section.section_date,
+            "disciplinas": _build_turma_disciplinas(activities, teacher_subjects),
+        },
         "resumo": _build_resumo(activities, encontros, ponderadas, artifacts, subjects_by_teacher),
         "sprints": _build_sprints(encontros, ponderadas, subjects_by_teacher),
         "projeto": _build_projeto(artifacts),
@@ -299,7 +324,7 @@ def _build_data(activities: list[Activity], turma: str, teacher_subjects: dict[s
 
 def write_html_dashboard(
     activities: list[Activity],
-    turma: str,
+    section: SectionInfo,
     teacher_subjects: dict[str, str],
     output_dir: Path | None = None,
 ) -> Path:
@@ -312,7 +337,7 @@ def write_html_dashboard(
     client-side and downloads it (the page has no server to call the writer
     functions directly once it's open in a browser).
     """
-    data = _build_data(activities, turma, teacher_subjects)
+    data = _build_data(activities, section, teacher_subjects)
     # The JSON sits inside a <script type="application/json"> tag as inert
     # text, parsed via JSON.parse() in JS — never interpreted as markup or
     # code, so a caption containing "</script>" can't break out of the tag or
@@ -320,7 +345,7 @@ def write_html_dashboard(
     # it lands in the payload.
     data_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
-    turma_dir = (output_dir or OUTPUT_DIR) / (turma or _UNKNOWN_TURMA)
+    turma_dir = (output_dir or OUTPUT_DIR) / (section.section_caption or _UNKNOWN_TURMA)
     turma_dir.mkdir(parents=True, exist_ok=True)
 
     path = turma_dir / "dashboard.html"
@@ -465,6 +490,9 @@ table.resumo th { background: var(--bg-alt); font-weight: 600; }
 }
 .copy-btn.copied { color: var(--accent); border-color: var(--accent); }
 ul.plain { margin: .3rem 0; padding-left: 1.1rem; font-size: .85rem; }
+.info-list { display: grid; grid-template-columns: max-content 1fr; gap: .5rem 1.5rem; margin: 0; font-size: .88rem; }
+.info-list dt { color: var(--text-muted); }
+.info-list dd { margin: 0; }
 ul.encontros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
 ul.encontros li { font-size: .85rem; display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
 ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 5.2rem; }
@@ -482,6 +510,7 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
     <button class="tab" data-view="projeto">Projeto</button>
     <button class="tab" data-view="prova">Prova</button>
     <button class="tab" data-view="ponderadas">Ponderadas</button>
+    <button class="tab" data-view="turma">Turma</button>
   </div>
 </header>
 <main>
@@ -523,6 +552,16 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
   <section class="view" id="view-ponderadas">
     <div class="section-actions"><button class="export-btn" id="export-ponderadas">Exportar dados</button></div>
     <div id="ponderadas"></div>
+  </section>
+  <section class="view" id="view-turma">
+    <div class="section">
+      <h2 id="turma-caption"></h2>
+      <dl class="info-list" id="turma-details"></dl>
+    </div>
+    <div class="section">
+      <h2>Disciplinas → Professores</h2>
+      <ul class="plain" id="turma-disciplinas"></ul>
+    </div>
   </section>
 </main>
 <footer>
@@ -767,25 +806,26 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
   function renderContent() {
     contentRoot.innerHTML = '';
     const subj = currentSubject;
-    if (subj.professors.length) contentRoot.appendChild(el('p', 'meta', `Professor(es): ${subj.professors.join(', ')}`));
 
     if (currentKind === 'instrucoes') {
       if (!subj.instrucoesBySprint.length) {
         contentRoot.appendChild(el('p', 'empty-state', 'Nenhuma instrução registrada.'));
       } else {
         subj.instrucoesBySprint.forEach(s => {
-          const p = el('p');
-          p.appendChild(el('strong', null, `Sprint ${s.sprint}: `));
-          p.appendChild(document.createTextNode(s.titles.join(', ')));
-          contentRoot.appendChild(p);
+          contentRoot.appendChild(el('p', 'meta', `Sprint ${s.sprint}`));
+          const ul = el('ul', 'plain');
+          s.titles.forEach(t => ul.appendChild(el('li', null, t)));
+          contentRoot.appendChild(ul);
         });
       }
     } else if (currentKind === 'autoestudo') {
-      contentRoot.appendChild(
-        subj.autoestudo.length
-          ? el('p', null, subj.autoestudo.join(', '))
-          : el('p', 'empty-state', 'Nenhum autoestudo registrado.')
-      );
+      if (!subj.autoestudo.length) {
+        contentRoot.appendChild(el('p', 'empty-state', 'Nenhum autoestudo registrado.'));
+      } else {
+        const ul = el('ul', 'plain');
+        subj.autoestudo.forEach(t => ul.appendChild(el('li', null, t)));
+        contentRoot.appendChild(ul);
+      }
     } else if (currentKind === 'links') {
       if (subj.links.length) {
         const head = el('div', 'card-head');
@@ -852,6 +892,37 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
     section.appendChild(grid);
     root.appendChild(section);
   });
+})();
+
+// ── Turma ────────────────────────────────────────────────────────────────
+(function renderTurma() {
+  const info = DATA.turmaInfo;
+  document.getElementById('turma-caption').textContent = info.caption || DATA.turma;
+
+  const dl = document.getElementById('turma-details');
+  [
+    ['Módulo', info.moduloCaption],
+    ['Descrição', info.moduloDescricao],
+    ['Orientador(a)', info.orientador],
+    ['Grupo', info.grupo],
+    ['Data da sessão', info.dataSessao],
+  ].forEach(([label, value]) => {
+    if (!value) return;
+    dl.appendChild(el('dt', null, label));
+    dl.appendChild(el('dd', null, value));
+  });
+
+  const list = document.getElementById('turma-disciplinas');
+  if (!info.disciplinas.length) {
+    list.appendChild(el('li', 'empty-state', 'Nenhuma disciplina mapeada encontrada.'));
+  } else {
+    info.disciplinas.forEach(d => {
+      const li = el('li');
+      li.appendChild(badge(d.subject, d.subject));
+      li.appendChild(document.createTextNode(` ${d.professors.join(', ')}`));
+      list.appendChild(li);
+    });
+  }
 })();
 
 // ── Tabs ─────────────────────────────────────────────────────────────────

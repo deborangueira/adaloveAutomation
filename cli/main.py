@@ -992,7 +992,7 @@ def gerar_tudo_turma() -> None:
 
     output_dir = _choose_output_dir()
 
-    dashboard_path = write_html_dashboard(activities, section.section_caption, teacher_subjects, output_dir)
+    dashboard_path = write_html_dashboard(activities, section, teacher_subjects, output_dir)
     _ok(f"Dashboard  —  [bold]{dashboard_path}[/bold]")
 
     console.print()
