@@ -402,8 +402,9 @@ header {
   padding: .5rem 1.25rem 0;
 }
 footer {
-  text-align: center; color: var(--text-muted); font-size: .75rem;
-  padding: 1.5rem 1.25rem 2rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  max-width: 1280px; margin: 0 auto;
+  color: var(--text-muted); font-size: .75rem; padding: 1.5rem 1.25rem 2rem;
 }
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
 .tab {
@@ -416,12 +417,14 @@ footer {
   border-bottom: 2px solid transparent;
 }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-.section-actions { margin-bottom: 1rem; }
-.export-btn {
-  border: 1px solid var(--accent); background: var(--accent); color: #fff;
-  border-radius: 6px; padding: .45rem .9rem; font-size: .82rem; cursor: pointer;
+.export-link {
+  display: none; align-items: center; gap: .4rem; flex: none;
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: .78rem; padding: 0;
 }
-.export-btn:hover { opacity: .9; }
+.export-link.active { display: inline-flex; }
+.export-link:hover { color: var(--accent); }
+.export-link svg { width: 14px; height: 14px; flex: none; }
 .kind-filter { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .kind-filter button {
   border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
@@ -539,7 +542,6 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
 </header>
 <main>
   <section class="view" id="view-calendario">
-    <div class="section-actions"><button class="export-btn" id="export-calendario">Exportar dados</button></div>
     <div class="split-layout">
       <div class="week-summary" id="resumo-table"></div>
       <div class="split-divider"></div>
@@ -547,7 +549,6 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
     </div>
   </section>
   <section class="view" id="view-projeto">
-    <div class="section-actions"><button class="export-btn" id="export-projeto">Exportar dados</button></div>
     <div class="split-layout">
       <nav class="split-nav" id="projeto-nav"></nav>
       <div class="split-divider"></div>
@@ -555,7 +556,6 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
     </div>
   </section>
   <section class="view" id="view-prova">
-    <div class="section-actions"><button class="export-btn" id="export-prova">Exportar dados</button></div>
     <div class="split-layout">
       <nav class="split-nav" id="prova-nav"></nav>
       <div class="split-divider"></div>
@@ -571,7 +571,6 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
     </div>
   </section>
   <section class="view" id="view-ponderadas">
-    <div class="section-actions"><button class="export-btn" id="export-ponderadas">Exportar dados</button></div>
     <div id="ponderadas"></div>
   </section>
   <section class="view" id="view-turma">
@@ -586,7 +585,11 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
   </section>
 </main>
 <footer>
-  <span id="turma-name"></span> · Gerado em <span id="generated-at"></span>
+  <span class="footer-meta"><span id="turma-name"></span> · Gerado em <span id="generated-at"></span></span>
+  <button class="export-link active" id="export-calendario" data-tab="calendario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-projeto" data-tab="projeto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-prova" data-tab="prova"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-ponderadas" data-tab="ponderadas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
 </footer>
 <script id="data" type="application/json">__DATA__</script>
 <script>
@@ -937,9 +940,11 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 // ── Tabs ─────────────────────────────────────────────────────────────────
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.view');
+const exportLinks = document.querySelectorAll('.export-link');
 function activateTab(name) {
   tabs.forEach(t => t.classList.toggle('active', t.dataset.view === name));
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
+  exportLinks.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
 }
 tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.view)));
 activateTab('calendario');
