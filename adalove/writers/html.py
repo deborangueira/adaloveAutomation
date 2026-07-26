@@ -158,6 +158,7 @@ def _build_sprints(
                 subject = subjects_by_teacher.get(a.professor_name, "")
                 items.append({
                     "date": _format_date(a.date),
+                    "week": a.folder_number,
                     "subject": subject or None,
                     "label": subject or tipo,
                     "title": a.caption.strip(),
@@ -165,6 +166,7 @@ def _build_sprints(
             else:
                 items.append({
                     "date": _format_date(a.date),
+                    "week": a.folder_number,
                     "subject": None,
                     "label": None,
                     "title": _short_projeto_title(a.caption),
@@ -468,7 +470,10 @@ table.resumo th, table.resumo td {
   border: 1px solid var(--border); padding: .4rem .55rem; text-align: left; vertical-align: top; white-space: nowrap;
 }
 table.resumo th { background: var(--bg-alt); font-weight: 600; }
+.resumo-transposed th, .resumo-transposed td { white-space: normal; }
+.resumo-transposed td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bar { display: flex; width: 90px; height: 12px; border-radius: 3px; overflow: hidden; background: var(--bg-alt); }
+.resumo-transposed .bar { width: 60px; }
 .bar span { height: 100%; }
 .badge {
   display: inline-block; padding: .1rem .45rem; border-radius: 999px; font-size: .72rem;
@@ -496,6 +501,7 @@ ul.plain { margin: .3rem 0; padding-left: 1.1rem; font-size: .85rem; }
 ul.encontros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
 ul.encontros li { font-size: .85rem; display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
 ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 5.2rem; }
+ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0; border-top: 1px solid var(--border); }
 .links a { display: block; font-size: .8rem; color: var(--accent); word-break: break-all; margin-bottom: .2rem; }
 .rich p { margin: .3rem 0; font-size: .85rem; }
 .rich ul { margin: .3rem 0; padding-left: 1.1rem; font-size: .85rem; }
@@ -516,13 +522,10 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
 <main>
   <section class="view" id="view-calendario">
     <div class="section-actions"><button class="export-btn" id="export-calendario">Exportar dados</button></div>
-    <div class="section">
-      <h2>Resumo do módulo</h2>
-      <div class="scroll-x"><table class="resumo" id="resumo-table"></table></div>
-    </div>
-    <div class="section">
-      <h2>Sprints</h2>
-      <div id="sprints"></div>
+    <div class="split-layout">
+      <div class="scroll-x"><table class="resumo resumo-transposed" id="resumo-table"></table></div>
+      <div class="split-divider"></div>
+      <div class="split-content" id="sprints"></div>
     </div>
   </section>
   <section class="view" id="view-projeto">
@@ -639,29 +642,25 @@ function downloadText(filename, content) {
 document.getElementById('turma-name').textContent = DATA.turma;
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 
-// ── Resumo do módulo ────────────────────────────────────────────────────
+// ── Resumo do módulo (transposto: semanas viram linhas) ───────────────────
+const SUBJECT_ABBR = {
+  'Programação': 'Prog', 'Matemática': 'Mat', 'Negócios': 'Neg',
+  'Liderança': 'Lid', 'UX': 'UX', 'Orientação': 'Orient',
+};
+const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
+
 (function renderResumo() {
   const table = document.getElementById('resumo-table');
   const headRow = el('tr');
-  headRow.appendChild(el('th', null, ''));
-  DATA.resumo.forEach(w => headRow.appendChild(el('th', null, `Semana ${String(w.week).padStart(2, '0')}`)));
+  ['', 'Composição', 'Ponderadas', 'Artefatos'].forEach(h => headRow.appendChild(el('th', null, h)));
   const thead = el('thead'); thead.appendChild(headRow); table.appendChild(thead);
 
   const tbody = el('tbody');
-
-  const ponderadasRow = el('tr');
-  ponderadasRow.appendChild(el('td', null, 'Ponderadas'));
   DATA.resumo.forEach(w => {
-    const td = el('td');
-    w.ponderadasSubjects.forEach(s => td.appendChild(badge(s, s)));
-    ponderadasRow.appendChild(td);
-  });
-  tbody.appendChild(ponderadasRow);
+    const row = el('tr');
+    row.appendChild(el('td', null, String(w.week)));
 
-  const composicaoRow = el('tr');
-  composicaoRow.appendChild(el('td', null, 'Composição de aulas'));
-  DATA.resumo.forEach(w => {
-    const td = el('td');
+    const compTd = el('td');
     if (w.composicao.length) {
       const bar = el('div', 'bar');
       w.composicao.forEach(seg => {
@@ -671,17 +670,17 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
         s.title = seg.subject;
         bar.appendChild(s);
       });
-      td.appendChild(bar);
+      compTd.appendChild(bar);
     }
-    composicaoRow.appendChild(td);
+    row.appendChild(compTd);
+
+    const pondTd = el('td');
+    w.ponderadasSubjects.forEach(s => pondTd.appendChild(badge(subjectAbbr(s), s)));
+    row.appendChild(pondTd);
+
+    row.appendChild(el('td', null, w.artifactCount ? String(w.artifactCount) : ''));
+    tbody.appendChild(row);
   });
-  tbody.appendChild(composicaoRow);
-
-  const artifactsRow = el('tr');
-  artifactsRow.appendChild(el('td', null, 'Artefatos'));
-  DATA.resumo.forEach(w => artifactsRow.appendChild(el('td', null, w.artifactCount ? String(w.artifactCount) : '')));
-  tbody.appendChild(artifactsRow);
-
   table.appendChild(tbody);
 })();
 
@@ -693,7 +692,10 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
     section.appendChild(el('h3', null, `Sprint ${sprint.number}`));
 
     const list = el('ul', 'encontros');
+    let prevWeek = null;
     sprint.encontros.forEach(item => {
+      if (prevWeek !== null && item.week !== prevWeek) list.appendChild(el('li', 'divider'));
+      prevWeek = item.week;
       const li = el('li');
       li.appendChild(el('span', 'date', item.date));
       if (item.label) li.appendChild(badge(item.label, item.subject));
@@ -701,18 +703,6 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
       list.appendChild(li);
     });
     section.appendChild(list);
-
-    if (sprint.ponderadas.length) {
-      section.appendChild(el('h4', null, 'Ponderadas'));
-      const pl = el('ul', 'plain');
-      sprint.ponderadas.forEach(p => {
-        const li = el('li');
-        li.appendChild(badge(p.subject, p.subject));
-        li.appendChild(document.createTextNode(` ${p.title} — ${p.weight} pontos — Semana ${String(p.week).padStart(2, '0')}`));
-        pl.appendChild(li);
-      });
-      section.appendChild(pl);
-    }
     root.appendChild(section);
   });
 })();
