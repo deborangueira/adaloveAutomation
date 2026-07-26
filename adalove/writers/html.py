@@ -499,8 +499,10 @@ ul.plain { margin: .3rem 0; padding-left: 1.1rem; font-size: .85rem; }
 .info-list dt { color: var(--text-muted); }
 .info-list dd { margin: 0; }
 ul.encontros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
-ul.encontros li { font-size: .85rem; display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
-ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 5.2rem; }
+ul.encontros li { font-size: .85rem; display: flex; gap: .5rem; align-items: baseline; }
+ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 5.2rem; flex: none; }
+ul.encontros .title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.encontros .badge { flex: none; }
 ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0; border-top: 1px solid var(--border); }
 .links a { display: block; font-size: .8rem; color: var(--accent); word-break: break-all; margin-bottom: .2rem; }
 .rich p { margin: .3rem 0; font-size: .85rem; }
@@ -699,7 +701,9 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
       const li = el('li');
       li.appendChild(el('span', 'date', item.date));
       if (item.label) li.appendChild(badge(item.label, item.subject));
-      li.appendChild(el('span', null, item.title));
+      const titleSpan = el('span', 'title', item.title);
+      titleSpan.title = item.title;
+      li.appendChild(titleSpan);
       list.appendChild(li);
     });
     section.appendChild(list);
