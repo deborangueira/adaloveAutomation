@@ -2,6 +2,7 @@ import platform
 import subprocess
 import sys
 import math
+import webbrowser
 from pathlib import Path
 
 # When the venv python binary is a symlink to the system interpreter, venv
@@ -41,6 +42,7 @@ from adalove.filters.activity import (
 )
 from adalove.writers.calendario import write_calendario_md
 from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
+from adalove.writers.html import write_html_dashboard
 from adalove.writers.ponderadas import write_ponderadas_md
 from adalove.writers.project import write_project_md
 from adalove.writers.subject_links import write_subject_links_md
@@ -437,7 +439,7 @@ def main(ctx: typer.Context) -> None:
             "Escolha uma opção:",
             choices=[
                 questionary.Choice("  Turma         —  Ver turma e professores da sessão atual",         value="turma"),
-                questionary.Choice("  Exportar tudo —  Calendário, Projeto, Prova, Ponderadas de uma vez", value="tudo"),
+                questionary.Choice("  Exportar tudo —  Abre o dashboard com Calendário, Projeto, Prova e Ponderadas", value="tudo"),
                 questionary.Choice("  Material      —  Ver conteúdo da turma",  value="material"),
                 questionary.Choice("  Dashboard     —  Ver frequência e progresso",                       value="dashboard"),
                 questionary.Choice("  Setup         —  Configurar credenciais e mapeamento de professores", value="setup"),
@@ -948,9 +950,11 @@ def calendario_export() -> None:
 # ── gerar tudo (turma) ────────────────────────────────────────────────────────
 
 def gerar_tudo_turma() -> None:
-    """Gera Calendário, Projeto, Prova e Ponderadas de uma vez só, a partir de
-    uma única busca de atividades — mesmos writers e mesmo output de sempre,
-    só que sem precisar entrar em cada opção individualmente."""
+    """Gera o dashboard interativo (Calendário, Projeto, Prova e Ponderadas
+    juntos num só HTML) a partir de uma única busca de atividades, e abre no
+    navegador — os arquivos .md de cada material continuam disponíveis em
+    Material › <opção>, ou pelo botão "Exportar dados" dentro do próprio
+    dashboard."""
     _section("Carregando")
 
     try:
@@ -988,37 +992,12 @@ def gerar_tudo_turma() -> None:
 
     output_dir = _choose_output_dir()
 
-    encontros = get_encontros(activities)
-    if encontros:
-        path = write_calendario_md(activities, section.section_caption, teacher_subjects, output_dir)
-        _ok(f"Calendário  —  {len(encontros)} encontros  —  [bold]{path}[/bold]")
-    else:
-        _info("Calendário  —  nenhum encontro encontrado.")
-
-    artifacts = get_project_artifacts(activities)
-    if artifacts:
-        paths = write_project_md(activities, section.section_caption, output_dir)
-        _ok(f"Projeto     —  {len(artifacts)} artefatos  —  {len(paths)} arquivos")
-    else:
-        _info("Projeto     —  nenhum artefato encontrado.")
-
-    prova_filtered = [a for a in activities if a.folder_number in _MODO_PROVA_WEEKS]
-    prova_paths = write_subject_links_md(prova_filtered, teacher_subjects, section.section_caption, output_dir)
-    if prova_paths:
-        _ok(f"Prova       —  {len(prova_paths)} arquivos")
-    else:
-        _info("Prova       —  nenhuma atividade com disciplina mapeada encontrada.")
-
-    ponderadas = get_ponderadas(activities)
-    if ponderadas:
-        path = write_ponderadas_md(activities, section.section_caption, output_dir)
-        _ok(f"Ponderadas  —  {len(ponderadas)} atividades  —  [bold]{path}[/bold]")
-    else:
-        _info("Ponderadas  —  nenhuma atividade ponderada encontrada.")
+    dashboard_path = write_html_dashboard(activities, section.section_caption, teacher_subjects, output_dir)
+    _ok(f"Dashboard  —  [bold]{dashboard_path}[/bold]")
 
     console.print()
 
-    _reveal_in_finder(output_dir / section.section_caption)
+    webbrowser.open(dashboard_path.resolve().as_uri())
 
 
 # ── fetch ─────────────────────────────────────────────────────────────────────
