@@ -372,10 +372,12 @@ header {
   z-index: 10;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  padding: 1rem 1.25rem 0;
+  padding: .5rem 1.25rem 0;
 }
-header h1 { margin: 0 0 .15rem; font-size: 1.25rem; }
-header .meta { color: var(--text-muted); font-size: .85rem; margin-bottom: .75rem; }
+footer {
+  text-align: center; color: var(--text-muted); font-size: .75rem;
+  padding: 1.5rem 1.25rem 2rem;
+}
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
 .tab {
   border: none;
@@ -481,8 +483,6 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
 </head>
 <body>
 <header>
-  <h1>Adalove — <span id="turma-name"></span></h1>
-  <div class="meta">Gerado em <span id="generated-at"></span></div>
   <div class="tabs">
     <button class="tab" data-view="calendario">Calendário</button>
     <button class="tab" data-view="projeto">Projeto</button>
@@ -525,6 +525,9 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
     <div id="ponderadas"></div>
   </section>
 </main>
+<footer>
+  <span id="turma-name"></span> · Gerado em <span id="generated-at"></span>
+</footer>
 <script id="data" type="application/json">__DATA__</script>
 <script>
 const DATA = JSON.parse(document.getElementById('data').textContent);
