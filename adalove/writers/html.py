@@ -401,13 +401,7 @@ footer {
   border-radius: 999px; padding: .3rem .8rem; font-size: .8rem; cursor: pointer;
 }
 .kind-filter button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.prova-grid { display: grid; gap: .75rem; align-items: start; }
-.prova-grid .card { min-width: 0; }
-.prova-grid .kind-block { margin-top: .6rem; }
-.prova-grid .kind-block:first-of-type { margin-top: 0; }
-@media (max-width: 900px) {
-  .prova-grid { grid-template-columns: 1fr !important; }
-}
+.scope-note { color: var(--text-muted); font-size: .78rem; margin: 0 0 1.25rem; }
 .split-layout { display: grid; grid-template-columns: 1fr 1px 2fr; gap: 1.5rem; }
 .split-nav { display: flex; flex-direction: column; gap: .15rem; }
 .split-nav button {
@@ -512,13 +506,19 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
   </section>
   <section class="view" id="view-prova">
     <div class="section-actions"><button class="export-btn" id="export-prova">Exportar dados</button></div>
-    <div class="kind-filter" id="prova-kind-filter">
-      <button class="active" data-kind="all">Todos</button>
-      <button data-kind="instrucoes">Instruções</button>
-      <button data-kind="autoestudo">Autoestudo</button>
-      <button data-kind="links">Links</button>
+    <div class="split-layout">
+      <nav class="split-nav" id="prova-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content">
+        <div class="kind-filter" id="prova-kind-filter">
+          <button class="active" data-kind="instrucoes">Instruções</button>
+          <button data-kind="autoestudo">Autoestudo</button>
+          <button data-kind="links">Links</button>
+        </div>
+        <p class="scope-note">Conteúdo das 8 primeiras semanas do módulo.</p>
+        <div id="prova-content"></div>
+      </div>
     </div>
-    <div class="grid prova-grid" id="prova"></div>
   </section>
   <section class="view" id="view-ponderadas">
     <div class="section-actions"><button class="export-btn" id="export-ponderadas">Exportar dados</button></div>
@@ -752,72 +752,83 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
 
 // ── Prova ────────────────────────────────────────────────────────────────
 (function renderProva() {
-  const root = document.getElementById('prova');
-  if (!DATA.prova.length) { root.appendChild(el('div', 'empty-state', 'Nenhuma disciplina mapeada encontrada.')); return; }
-  root.style.gridTemplateColumns = `repeat(${DATA.prova.length}, 1fr)`;
+  const navRoot = document.getElementById('prova-nav');
+  const contentRoot = document.getElementById('prova-content');
+  if (!DATA.prova.length) {
+    document.querySelector('#view-prova .split-divider').style.display = 'none';
+    document.querySelector('#view-prova .kind-filter').style.display = 'none';
+    contentRoot.appendChild(el('div', 'empty-state', 'Nenhuma disciplina mapeada encontrada.'));
+    return;
+  }
 
-  DATA.prova.forEach(subj => {
-    const card = el('article', 'card');
-    const h3 = el('h3', null, subj.name);
-    if (subjectColor(subj.name)) h3.style.color = subjectColor(subj.name);
-    card.appendChild(h3);
-    if (subj.professors.length) card.appendChild(el('p', 'meta', `Professor(es): ${subj.professors.join(', ')}`));
+  let currentSubject = DATA.prova[0];
+  let currentKind = 'instrucoes';
 
-    if (subj.instrucoesBySprint.length) {
-      const block = el('div', 'kind-block');
-      block.dataset.kind = 'instrucoes';
-      block.appendChild(el('h4', null, 'Instruções'));
-      subj.instrucoesBySprint.forEach(s => {
-        block.appendChild(el('p', 'meta', `Sprint ${s.sprint}`));
-        const ul = el('ul', 'plain');
-        s.titles.forEach(t => ul.appendChild(el('li', null, t)));
-        block.appendChild(ul);
-      });
-      card.appendChild(block);
-    }
-    if (subj.autoestudo.length) {
-      const block = el('div', 'kind-block');
-      block.dataset.kind = 'autoestudo';
-      block.appendChild(el('h4', null, 'Autoestudo'));
-      const ul = el('ul', 'plain');
-      subj.autoestudo.forEach(t => ul.appendChild(el('li', null, t)));
-      block.appendChild(ul);
-      card.appendChild(block);
-    }
-    if (subj.links.length || subj.books.length) {
-      const block = el('div', 'kind-block');
-      block.dataset.kind = 'links';
+  function renderContent() {
+    contentRoot.innerHTML = '';
+    const subj = currentSubject;
+    if (subj.professors.length) contentRoot.appendChild(el('p', 'meta', `Professor(es): ${subj.professors.join(', ')}`));
+
+    if (currentKind === 'instrucoes') {
+      if (!subj.instrucoesBySprint.length) {
+        contentRoot.appendChild(el('p', 'empty-state', 'Nenhuma instrução registrada.'));
+      } else {
+        subj.instrucoesBySprint.forEach(s => {
+          const p = el('p');
+          p.appendChild(el('strong', null, `Sprint ${s.sprint}: `));
+          p.appendChild(document.createTextNode(s.titles.join(', ')));
+          contentRoot.appendChild(p);
+        });
+      }
+    } else if (currentKind === 'autoestudo') {
+      contentRoot.appendChild(
+        subj.autoestudo.length
+          ? el('p', null, subj.autoestudo.join(', '))
+          : el('p', 'empty-state', 'Nenhum autoestudo registrado.')
+      );
+    } else if (currentKind === 'links') {
       if (subj.links.length) {
-        const linksHead = el('div', 'card-head');
-        linksHead.appendChild(el('h4', null, 'Links'));
+        const head = el('div', 'card-head');
+        head.appendChild(el('h4', null, 'Links'));
         const copyAllBtn = el('button', 'copy-btn', 'Copiar todos');
         copyAllBtn.type = 'button';
         copyAllBtn.addEventListener('click', () => copyText(subj.links.join('\n'), copyAllBtn));
-        linksHead.appendChild(copyAllBtn);
-        block.appendChild(linksHead);
+        head.appendChild(copyAllBtn);
+        contentRoot.appendChild(head);
         const div = el('div', 'links');
         subj.links.forEach(u => { const a = el('a', null, u); a.href = u; a.target = '_blank'; a.rel = 'noopener'; div.appendChild(a); });
-        block.appendChild(div);
+        contentRoot.appendChild(div);
+      } else {
+        contentRoot.appendChild(el('p', 'empty-state', 'Nenhum link registrado.'));
       }
       if (subj.books.length) {
-        block.appendChild(el('h4', null, 'Referências a livros'));
+        contentRoot.appendChild(el('h4', null, 'Referências a livros'));
         const div = el('div', 'links');
         subj.books.forEach(u => { const a = el('a', null, u); a.href = u; a.target = '_blank'; a.rel = 'noopener'; div.appendChild(a); });
-        block.appendChild(div);
+        contentRoot.appendChild(div);
       }
-      card.appendChild(block);
     }
-    root.appendChild(card);
+  }
+
+  DATA.prova.forEach((subj, i) => {
+    const btn = el('button', i === 0 ? 'active' : null, subj.name);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      currentSubject = subj;
+      renderContent();
+    });
+    navRoot.appendChild(btn);
   });
 
   const kindButtons = document.querySelectorAll('#prova-kind-filter button');
   kindButtons.forEach(btn => btn.addEventListener('click', () => {
     kindButtons.forEach(b => b.classList.toggle('active', b === btn));
-    const kind = btn.dataset.kind;
-    document.querySelectorAll('#prova .kind-block').forEach(block => {
-      block.style.display = (kind === 'all' || block.dataset.kind === kind) ? '' : 'none';
-    });
+    currentKind = btn.dataset.kind;
+    renderContent();
   }));
+
+  renderContent();
 })();
 
 // ── Ponderadas ───────────────────────────────────────────────────────────
