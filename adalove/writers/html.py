@@ -406,6 +406,35 @@ header .meta { color: var(--text-muted); font-size: .85rem; margin-bottom: .75re
 @media (max-width: 900px) {
   .prova-grid { grid-template-columns: 1fr !important; }
 }
+.split-layout { display: grid; grid-template-columns: 1fr 1px 2fr; gap: 1.5rem; }
+.split-nav { display: flex; flex-direction: column; gap: .15rem; }
+.split-nav button {
+  text-align: left; border: none; background: transparent; color: var(--text-muted);
+  padding: .55rem .75rem; font-size: .88rem; cursor: pointer; border-radius: 6px;
+}
+.split-nav button:hover { background: var(--bg-alt); }
+.split-nav button.active { background: var(--accent); color: #fff; font-weight: 600; }
+.split-divider { background: var(--border); }
+.split-content { min-width: 0; }
+@media (max-width: 900px) {
+  .split-layout { grid-template-columns: 1fr; }
+  .split-divider { display: none; }
+  .split-nav { flex-direction: row; flex-wrap: wrap; }
+}
+.proj-item { margin-bottom: 1.75rem; }
+.proj-item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; margin-bottom: .6rem; }
+.proj-item-head h3 { margin: 0; font-size: 1rem; }
+.proj-item-body { position: relative; max-height: 150px; overflow: hidden; }
+.proj-item-body.expanded { max-height: none; }
+.proj-item-body.collapsible:not(.expanded)::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+.ver-mais-btn {
+  display: inline-block; margin-top: .5rem; border: none; background: transparent;
+  color: var(--accent); font-size: .8rem; font-weight: 600; cursor: pointer; padding: 0;
+}
 main { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
 .view { display: none; }
 .view.active { display: block; }
@@ -475,7 +504,11 @@ ul.encontros .date { color: var(--text-muted); font-variant-numeric: tabular-num
   </section>
   <section class="view" id="view-projeto">
     <div class="section-actions"><button class="export-btn" id="export-projeto">Exportar dados</button></div>
-    <div id="projeto"></div>
+    <div class="split-layout">
+      <nav class="split-nav" id="projeto-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content" id="projeto-content"></div>
+    </div>
   </section>
   <section class="view" id="view-prova">
     <div class="section-actions"><button class="export-btn" id="export-prova">Exportar dados</button></div>
@@ -644,16 +677,36 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
 
 // ── Projeto ──────────────────────────────────────────────────────────────
 (function renderProjeto() {
-  const root = document.getElementById('projeto');
-  if (!DATA.projeto.length) { root.appendChild(el('div', 'empty-state', 'Nenhum artefato de projeto encontrado.')); return; }
-  DATA.projeto.forEach(sprint => {
-    const section = el('div', 'section');
-    section.appendChild(el('h2', null, `Sprint ${sprint.sprint} (Semana ${String(sprint.week).padStart(2, '0')})`));
-    const grid = el('div', 'grid');
+  const navRoot = document.getElementById('projeto-nav');
+  const contentRoot = document.getElementById('projeto-content');
+  if (!DATA.projeto.length) {
+    document.querySelector('#view-projeto .split-divider').style.display = 'none';
+    contentRoot.appendChild(el('div', 'empty-state', 'Nenhum artefato de projeto encontrado.'));
+    return;
+  }
+
+  // Only adds the "Ver tudo" toggle (and the fade) when the collapsed body
+  // actually clips content — short artifacts stay as-is, nothing to expand.
+  function makeExpandable(body) {
+    requestAnimationFrame(() => {
+      if (body.scrollHeight <= body.clientHeight + 4) return;
+      body.classList.add('collapsible');
+      const toggle = el('button', 'ver-mais-btn', 'Ver tudo');
+      toggle.type = 'button';
+      toggle.addEventListener('click', () => {
+        const expanded = body.classList.toggle('expanded');
+        toggle.textContent = expanded ? 'Ver menos' : 'Ver tudo';
+      });
+      body.after(toggle);
+    });
+  }
+
+  function renderContent(sprint) {
+    contentRoot.innerHTML = '';
     sprint.artifacts.forEach(a => {
-      const card = el('article', 'card');
-      const head = el('div', 'card-head');
-      head.appendChild(el('h4', null, a.caption));
+      const item = el('article', 'proj-item');
+      const head = el('div', 'proj-item-head');
+      head.appendChild(el('h3', null, a.caption));
       const copyBtn = el('button', 'copy-btn', 'Copiar');
       copyBtn.type = 'button';
       copyBtn.addEventListener('click', () => {
@@ -661,12 +714,36 @@ document.getElementById('generated-at').textContent = DATA.generatedAt;
         copyText(text, copyBtn);
       });
       head.appendChild(copyBtn);
-      card.appendChild(head);
-      richHtml(card, a.html);
-      grid.appendChild(card);
+      item.appendChild(head);
+
+      const body = el('div', 'proj-item-body');
+      richHtml(body, a.html);
+      item.appendChild(body);
+      contentRoot.appendChild(item);
+      makeExpandable(body);
     });
-    section.appendChild(grid);
-    root.appendChild(section);
+  }
+
+  DATA.projeto.forEach((sprint, i) => {
+    const btn = el('button', i === 0 ? 'active' : null, `Sprint ${sprint.sprint}`);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      renderContent(sprint);
+    });
+    navRoot.appendChild(btn);
+  });
+
+  // The Projeto tab starts hidden (display:none), where scrollHeight reads
+  // as 0 — makeExpandable's overflow check would always come up empty. Defer
+  // the first render until the tab is actually visible, so the measurement
+  // reflects real layout.
+  let initialized = false;
+  document.querySelector('.tab[data-view="projeto"]').addEventListener('click', () => {
+    if (!initialized) {
+      initialized = true;
+      renderContent(DATA.projeto[0]);
+    }
   });
 })();
 
