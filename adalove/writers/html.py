@@ -588,7 +588,7 @@ ul.encontros li.divider { display: block; height: 0; padding: 0; margin: .3rem 0
   <span class="footer-meta"><span id="turma-name"></span> · Gerado em <span id="generated-at"></span></span>
   <button class="export-link active" id="export-calendario" data-tab="calendario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
   <button class="export-link" id="export-projeto" data-tab="projeto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
-  <button class="export-link" id="export-prova" data-tab="prova"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-prova" data-tab="prova"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados da matéria (.md)</span></button>
   <button class="export-link" id="export-ponderadas" data-tab="ponderadas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
 </footer>
 <script id="data" type="application/json">__DATA__</script>
@@ -809,11 +809,21 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
     document.querySelector('#view-prova .split-divider').style.display = 'none';
     document.querySelector('#view-prova .kind-filter').style.display = 'none';
     contentRoot.appendChild(el('div', 'empty-state', 'Nenhuma disciplina mapeada encontrada.'));
+    document.getElementById('export-prova').style.display = 'none';
     return;
   }
 
   let currentSubject = DATA.prova[0];
   let currentKind = 'instrucoes';
+
+  // Prova is browsed one subject at a time, so its export downloads just
+  // the subject currently on screen — not the whole tab like the other
+  // three buttons — matching the per-discipline files write_subject_links_md
+  // already produces (matematica.md, programacao.md, ...).
+  document.getElementById('export-prova').addEventListener('click', () => {
+    const slug = currentSubject.name.toLowerCase().replace(/ /g, '-');
+    downloadText(`prova-${slug}.md`, buildProvaSubjectMd(currentSubject));
+  });
 
   function renderContent() {
     contentRoot.innerHTML = '';
@@ -1024,42 +1034,38 @@ function buildPonderadasMd() {
   return lines.join('\n');
 }
 
-function buildProvaMd() {
-  const blocks = DATA.prova.map(subj => {
-    const lines = [`# ${subj.name}`, '', `> Gerado em: ${DATA.generatedAt}`];
-    if (subj.professors.length) lines.push(`> Professor: ${subj.professors.join(', ')}`);
+function buildProvaSubjectMd(subj) {
+  const lines = [`# ${subj.name}`, '', `> Gerado em: ${DATA.generatedAt}`];
+  if (subj.professors.length) lines.push(`> Professor: ${subj.professors.join(', ')}`);
+  lines.push('');
+  if (subj.instrucoesBySprint.length) {
+    lines.push('## Instruções', '');
+    subj.instrucoesBySprint.forEach(s => {
+      lines.push(`### Sprint ${s.sprint}`, '');
+      s.titles.forEach(t => lines.push(`- ${t}`));
+      lines.push('');
+    });
+  }
+  if (subj.autoestudo.length) {
+    lines.push('## Autoestudo', '');
+    subj.autoestudo.forEach(t => lines.push(`- ${t}`));
     lines.push('');
-    if (subj.instrucoesBySprint.length) {
-      lines.push('## Instruções', '');
-      subj.instrucoesBySprint.forEach(s => {
-        lines.push(`### Sprint ${s.sprint}`, '');
-        s.titles.forEach(t => lines.push(`- ${t}`));
-        lines.push('');
-      });
-    }
-    if (subj.autoestudo.length) {
-      lines.push('## Autoestudo', '');
-      subj.autoestudo.forEach(t => lines.push(`- ${t}`));
-      lines.push('');
-    }
-    if (subj.links.length) {
-      lines.push('## Links', '');
-      subj.links.forEach(u => lines.push(u));
-      lines.push('');
-    }
-    if (subj.books.length) {
-      lines.push('## Referências a livros', '');
-      subj.books.forEach(u => lines.push(u));
-      lines.push('');
-    }
-    return lines.join('\n');
-  });
-  return blocks.join('\n---\n\n');
+  }
+  if (subj.links.length) {
+    lines.push('## Links', '');
+    subj.links.forEach(u => lines.push(u));
+    lines.push('');
+  }
+  if (subj.books.length) {
+    lines.push('## Referências a livros', '');
+    subj.books.forEach(u => lines.push(u));
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 document.getElementById('export-calendario').addEventListener('click', () => downloadText('calendario.md', buildCalendarioMd()));
 document.getElementById('export-projeto').addEventListener('click', () => downloadText('projeto.md', buildProjetoMd()));
-document.getElementById('export-prova').addEventListener('click', () => downloadText('prova.md', buildProvaMd()));
 document.getElementById('export-ponderadas').addEventListener('click', () => downloadText('ponderadas.md', buildPonderadasMd()));
 </script>
 </body>
