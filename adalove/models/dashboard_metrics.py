@@ -5,6 +5,9 @@ from adalove.filters.activity import get_autoestudos, get_ponderadas
 from adalove.models.activity import Activity
 from adalove.models.student_status import StudentStatus
 
+# Assumes the module's Prova is worth 20% of the final grade and 7.0 is the
+# passing threshold — not independently verified against Inteli's official
+# grading policy; update these if that assumption turns out to be wrong.
 _PASSING_GRADE = 7.0
 _PROVA_SHARE = 0.20
 
@@ -28,7 +31,6 @@ class DashboardMetrics:
     ) -> "DashboardMetrics":
         semana_atual = _compute_week(section_date_str)
         ponderadas = get_ponderadas(activities)
-        artefatos = [a for a in activities if a.type == 21]
         auto_estudos = get_autoestudos(activities)
 
         acumulada = student_status.done_evaluation_result
@@ -43,6 +45,10 @@ class DashboardMetrics:
             ponderadas_semana=sum(
                 1 for a in ponderadas if a.folder_number == semana_atual
             ),
+            # status == 3 is assumed to mean "concluído" — like the type codes
+            # in filters/activity.py, but unlike those this hasn't been
+            # independently cross-checked against the Adalove UI; revisit if
+            # these counts look wrong.
             auto_estudos_feitos=sum(1 for a in auto_estudos if a.status == 3),
             auto_estudos_a_fazer=sum(1 for a in auto_estudos if a.status != 3),
         )
@@ -59,13 +65,3 @@ def _compute_week(section_date_str: str, _today: date | None = None) -> int:
     section_monday = section - timedelta(days=section.weekday())
     today_monday = today - timedelta(days=today.weekday())
     return max(1, (today_monday - section_monday).days // 7 + 1)
-
-
-def _weighted_avg(activities: list[Activity]) -> float:
-    graded = [a for a in activities if a.grade_result >= 0]
-    if not graded:
-        return 0.0
-    total_weight = sum(a.grade_weight for a in graded)
-    if total_weight == 0:
-        return 0.0
-    return sum(a.grade_result * a.grade_weight for a in graded) / total_weight
