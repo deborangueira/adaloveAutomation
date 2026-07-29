@@ -470,20 +470,18 @@ main { padding: 1.25rem; max-width: 1280px; margin: 0 auto; }
 .scroll-x { overflow-x: auto; }
 .week-summary { display: flex; flex-direction: column; }
 .week-summary-header, .week-row {
-  display: grid; grid-template-columns: 2.2rem 5.75rem 1fr 3.5rem; align-items: center; gap: .6rem;
+  display: grid; grid-template-columns: 2.2rem 5.75rem 1fr; align-items: center; gap: .6rem;
 }
 .week-summary-header {
   color: var(--text-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
   font-weight: 600; padding: 0 .5rem .6rem; border-bottom: 1px solid var(--border);
 }
-.week-summary-header span:last-child, .week-row .artefatos-cell { text-align: right; }
 .week-row {
   padding: .6rem .5rem; border-bottom: 1px solid var(--border); border-radius: 8px;
 }
 .week-row:last-child { border-bottom: none; }
 .week-row:hover { background: var(--bg-alt); }
 .week-row .ponderadas-cell { display: flex; flex-wrap: wrap; gap: .3rem; }
-.week-row .artefatos-cell { color: var(--text-muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
 .week-pill {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--bg-alt);
@@ -691,7 +689,7 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
   const root = document.getElementById('resumo-table');
 
   const header = el('div', 'week-summary-header');
-  ['', 'Composição', 'Ponderadas', 'Artefatos'].forEach(h => header.appendChild(el('span', null, h)));
+  ['', 'Composição', 'Ponderadas'].forEach(h => header.appendChild(el('span', null, h)));
   root.appendChild(header);
 
   DATA.resumo.forEach(w => {
@@ -716,7 +714,6 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
     w.ponderadasSubjects.forEach(s => pondCell.appendChild(badge(subjectAbbr(s), s)));
     row.appendChild(pondCell);
 
-    row.appendChild(el('span', 'artefatos-cell', w.artifactCount ? String(w.artifactCount) : '–'));
     root.appendChild(row);
   });
 })();
