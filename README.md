@@ -6,7 +6,7 @@ Foi dessa necessidade que surgiu o **Adalove CLI**. No começo, a ideia era simp
 
 Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada e organizada. Em poucos segundos, você consegue gerar, por exemplo, o **Calendário de aulas e ponderadas**, separado por sprint, **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova, e a **Lista de todos os artefatos do projeto**, organizada por sprint. Todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em diferentes ferramentas como Notion, Obsidian, Claude, etc.
 
-![Adalove CLI em execução](images/Captura%20de%20Tela%202026-07-24%20às%2013.57.34.png)
+![Adalove CLI em execução](images/cli.png)
 
 ## O que você consegue fazer
 
@@ -23,6 +23,24 @@ Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas infor
 | **Setup** | Credenciais e disciplinas | - |
 
 Em qualquer exportação, o CLI abre um seletor de pasta nativo do macOS perguntando onde salvar os arquivos, se você cancelar, ele usa a pasta `output/` do próprio projeto. Ao final, a pasta escolhida já abre sozinha no Finder.
+
+### Prévia dos materiais
+
+**Calendário** — resumo do módulo por semana, encontros e ponderadas por sprint:
+
+![Prévia do Calendário](images/calendario.png)
+
+**Ponderadas** — título, professor, peso e descrição de cada atividade, por semana:
+
+![Prévia das Ponderadas](images/ponderadas.png)
+
+**Projeto** — artefatos de cada sprint:
+
+![Prévia do Projeto](images/projeto.png)
+
+**Prova** — assuntos e links por disciplina:
+
+![Prévia da Prova](images/prova-conteudo.png)
 
 ## Instalação
 
@@ -46,24 +64,7 @@ adalove fetch    # ir direto pro filtro livre (Buscar)
 
 Na primeira execução, escolha **Setup**. A partir daí, é só abrir `adalove` e navegar pelo menu — todas as opções acima ficam disponíveis ali.
 
-## Como as atividades são identificadas e classificadas
-
-Depois da autenticação, todos os dados vêm de uma única requisição HTTP a um endpoint REST da API (`apiv2.inteli.edu.br/.../userdata`), que devolve um JSON puro contendo, no campo `activities`, uma lista única com todas as atividades do módulo (aulas, autoestudos, ponderadas, artefatos de projeto, encontros), tudo misturado, sem nenhum campo que diga explicitamente "isso é uma ponderada" ou "isso é um encontro". 
-
-Por isso surgiu a necessidade de procurar, entre os campos brutos que cada atividade traz, um identificador confiável que separe os tipos entre si. Encontrei esse identificador no campo numérico `type`, mas ele vem sem rótulo nenhum e precisei criar critérios que fossem confiáveis o suficiente para categorizar as atividades corretamente. 
-
-A confiança no output vem, portanto, de uma descoberta empírica que uniu evidências de vários lugares: a legenda dos próprios cards evidenciou o `type 11` (todo card com "Autoestudo" no título era sempre desse tipo), e o badge "Atividade ponderada: X pontos" que a interface mostra pra cada nota evidenciou o `gradeWeight` como critério complementar para separar os autoestudos ponderados dos não ponderados. Além disso, a presença de datas foi o diferencial que separou os cards de encontro de todos os outros, sendo eles identificados com `type 1` ou `type 2`. 
-
-Cruzando essas pistas, cheguei aos quatro valores abaixo.
-
-| Identificação | Classificação | Utilizado no menu em |
-|---|---|---|
-| `type == 1` | Encontro de **projeto** | Material › Calendário e Exportar tudo |
-| `type == 2` | Encontro de **instrução** | Material › Calendário, Material › Prova (seção Instruções, agrupada por sprint) e Exportar tudo |
-| `type == 11` e `gradeWeight > 0` | **Ponderadas** | Material › Ponderadas, Material › Calendário, Material › Buscar (marca "(Ponderada)" nos resultados), Exportar tudo e Dashboard |
-| `type == 11` e `gradeWeight <= 0` | **Autoestudo** | Material › Prova (seção Autoestudo), Exportar tudo e Dashboard |
-
-Qualquer alteração não documentada que a Adalove fizer nesses valores pode quebrar essa classificação sem aviso e gerar outputs incorretos. Por isso, no caso de inconsistência, sugiro fazer a checagem desses identificadores.
+Quer entender como cada atividade é identificada dentro do JSON da Adalove (e o que cada botão "Exportar dados" do dashboard gera)? Isso está documentado à parte em [`docs/identificacao-e-exportacao.md`](docs/identificacao-e-exportacao.md).
 
 ## Credenciais: como funciona por baixo dos panos
 
@@ -100,6 +101,13 @@ output/
     buscar/                  # Material › Buscar
       <disciplina>_semana-<semanas>_<modo>.md
 ```
+
+![Pasta de saída completa](images/output-completo.png)
+
+Dentro de `projeto/` e `prova/`, um arquivo por sprint/disciplina, mais o consolidado:
+
+![Pasta do Projeto](images/arquivos-projeto.png)
+![Pasta da Prova](images/prova.png)
 
 ## Estrutura do projeto
 
