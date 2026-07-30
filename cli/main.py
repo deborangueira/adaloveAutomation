@@ -33,19 +33,12 @@ from adalove.models.dashboard_metrics import DashboardMetrics
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import (
     filter_activities,
-    get_encontros,
-    get_ponderadas,
-    get_project_artifacts,
     get_unique_teachers,
     get_unique_weeks,
     infer_teacher_subjects,
 )
-from adalove.writers.calendario import write_calendario_md
 from adalove.writers.fetch import MODE_COMPLETO, MODE_DESCRICAO, MODE_LINK, write_fetch_md
 from adalove.writers.html import write_html_dashboard
-from adalove.writers.ponderadas import write_ponderadas_md
-from adalove.writers.project import write_project_md
-from adalove.writers.subject_links import write_subject_links_md
 
 app = typer.Typer(
     help="Fetch and filter Adalove activities.",
@@ -343,82 +336,6 @@ def dashboard() -> None:
         raise typer.Exit(0)
 
 
-def turma_info() -> None:
-    """Mostra a turma/módulo da sessão atual e o mapeamento de professores, para
-    conferir que o token configurado se refere à turma certa antes de usar o resto
-    das ferramentas."""
-    _section("Turma Atual")
-
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        _err(str(e))
-        return
-
-    config = _ensure_fresh_token(config)
-    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
-
-    console.print("  Buscando informações da turma...")
-    try:
-        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        section, activities = client.fetch_section_overview()
-    except KeyError as e:
-        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
-        return
-    except PermissionError:
-        try:
-            config = _recapture_and_reload()
-            teacher_subjects = config.get("teacher_subjects", {})
-            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            section, activities = client.fetch_section_overview()
-        except (ConnectionError, ValueError) as e:
-            _err(str(e))
-            return
-    except (ConnectionError, ValueError) as e:
-        _err(str(e))
-        return
-
-    console.print()
-    info_tbl = Table(box=box.SIMPLE_HEAVY, show_header=False, padding=(0, 2))
-    info_tbl.add_column("label", style="dim")
-    info_tbl.add_column("value", style="bold white")
-    info_tbl.add_row("Turma", section.section_caption)
-    info_tbl.add_row("Módulo", section.project_caption)
-    info_tbl.add_row("Descrição", section.project_description)
-    info_tbl.add_row("Orientador(a)", section.advisor_name)
-    info_tbl.add_row("Grupo", section.group_caption)
-    info_tbl.add_row("Data da seção", section.section_date)
-    console.print(info_tbl)
-
-    _section("Disciplinas → Professores")
-
-    teachers = get_unique_teachers(activities)
-    inferred = infer_teacher_subjects(activities)
-    if not teachers:
-        _info("Nenhum professor encontrado nas atividades.")
-    else:
-        for teacher in teachers:
-            subject = teacher_subjects.get(teacher)
-            if subject:
-                console.print(f"  [dim]•[/dim]  [bold]{subject}[/bold] → {teacher}")
-            elif teacher in inferred:
-                console.print(
-                    f"  [dim]•[/dim]  [bold]{inferred[teacher]}[/bold] → {teacher} "
-                    "[dim](inferido pelo eixo, não salvo — rode o Setup)[/dim]"
-                )
-            else:
-                console.print(f"  [bold yellow]•[/bold yellow]  [yellow]sem disciplina mapeada[/yellow] → {teacher}")
-
-    console.print()
-    result = questionary.select(
-        "Turma",
-        choices=[questionary.Choice("← Voltar ao menu", value="back")],
-        style=STYLE,
-    ).ask()
-    if result is None:
-        raise typer.Exit(0)
-
-
 # ── main menu ─────────────────────────────────────────────────────────────────
 
 @app.callback()
@@ -438,12 +355,10 @@ def main(ctx: typer.Context) -> None:
         choice = questionary.select(
             "Escolha uma opção:",
             choices=[
-                questionary.Choice("  Turma         —  Ver turma e professores da sessão atual",         value="turma"),
-                questionary.Choice("  Exportar tudo —  Abre o dashboard com Calendário, Projeto, Prova e Ponderadas", value="tudo"),
-                questionary.Choice("  Material      —  Ver conteúdo da turma",  value="material"),
-                questionary.Choice("  Dashboard     —  Ver frequência e progresso",                       value="dashboard"),
-                questionary.Choice("  Setup         —  Configurar credenciais e mapeamento de professores", value="setup"),
-                questionary.Choice("  Sair",                                                               value="exit"),
+                questionary.Choice("  Abrir Dashboard —  Calendário, Projeto, Prova e Ponderadas em um só HTML", value="tudo"),
+                questionary.Choice("  Progresso       —  Ver frequência e progresso",                       value="dashboard"),
+                questionary.Choice("  Setup           —  Configurar credenciais e mapeamento de professores", value="setup"),
+                questionary.Choice("  Sair",                                                                 value="exit"),
             ],
             style=STYLE,
         ).ask()
@@ -456,55 +371,8 @@ def main(ctx: typer.Context) -> None:
                 check(ctx)
             elif choice == "tudo":
                 gerar_tudo_turma()
-            elif choice == "material":
-                material_turma_menu()
             elif choice == "dashboard":
                 dashboard()
-            elif choice == "turma":
-                turma_info()
-        except typer.Exit:
-            pass
-
-
-def material_turma_menu() -> None:
-    """Submenu com as saídas geradas a partir da turma atual: Calendário,
-    Projeto, Prova, Ponderadas e Buscar."""
-    while True:
-        _header("Material")
-
-        _window(
-            "Material",
-            "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
-        )
-        console.print()
-
-        choice = questionary.select(
-            "Escolha uma opção:",
-            choices=[
-                questionary.Choice("  Calendário —  Todos os encontros da turma",                    value="calendario"),
-                questionary.Choice("  Projeto    —  Todos os artefatos do projeto",                  value="project"),
-                questionary.Choice("  Prova      —  Todos os Autoestudos da prova",                  value="subject"),
-                questionary.Choice("  Ponderadas —  Todas as ponderadas da turma",                    value="ponderadas"),
-                questionary.Choice("  Buscar     —  Baixar autoestudos por semana e disciplina",      value="fetch"),
-                questionary.Choice("  ← Voltar",                                                      value="back"),
-            ],
-            style=STYLE,
-        ).ask()
-
-        if choice is None or choice == "back":
-            return
-
-        try:
-            if choice == "calendario":
-                calendario_export()
-            elif choice == "project":
-                project_export()
-            elif choice == "subject":
-                subject_export()
-            elif choice == "ponderadas":
-                ponderadas_export()
-            elif choice == "fetch":
-                fetch()
         except typer.Exit:
             pass
 
@@ -732,229 +600,14 @@ def _ensure_fresh_token(config: dict) -> dict:
     return config
 
 
-# ── subject export ────────────────────────────────────────────────────────────
-
-_MODO_PROVA_WEEKS = range(1, 9)
-
-
-def subject_export() -> None:
-    """Gera um arquivo .md por disciplina com todos os links das 8 primeiras semanas."""
-    _section("Carregando")
-
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        _err(str(e))
-        return
-
-    config = _ensure_fresh_token(config)
-    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
-
-    console.print("  Buscando atividades...")
-    try:
-        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        section, activities = client.fetch_section_overview()
-    except KeyError as e:
-        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
-        return
-    except PermissionError:
-        try:
-            config = _recapture_and_reload()
-            teacher_subjects = config.get("teacher_subjects", {})
-            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            section, activities = client.fetch_section_overview()
-        except (ConnectionError, ValueError) as e:
-            _err(str(e))
-            return
-    except (ConnectionError, ValueError) as e:
-        _err(str(e))
-        return
-
-    _ok(f"{len(activities)} atividades carregadas.")
-
-    filtered = [a for a in activities if a.folder_number in _MODO_PROVA_WEEKS]
-
-    _section("Resultados")
-
-    output_dir = _choose_output_dir()
-    paths = write_subject_links_md(filtered, teacher_subjects, section.section_caption, output_dir)
-
-    if not paths:
-        _info("Nenhuma atividade com disciplina mapeada encontrada.")
-        return
-
-    for p in paths:
-        _ok(f"[bold]{p}[/bold]")
-    console.print()
-
-    _reveal_in_finder(paths[0].parent)
-
-
-# ── project export ────────────────────────────────────────────────────────────
-
-def project_export() -> None:
-    """Gera um único .md com os artefatos de projeto (Desenvolvimento de Projeto),
-    organizados por sprint."""
-    _section("Carregando")
-
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        _err(str(e))
-        return
-
-    config = _ensure_fresh_token(config)
-
-    console.print("  Buscando atividades...")
-    try:
-        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        section, activities = client.fetch_section_overview()
-    except KeyError as e:
-        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
-        return
-    except PermissionError:
-        try:
-            config = _recapture_and_reload()
-            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            section, activities = client.fetch_section_overview()
-        except (ConnectionError, ValueError) as e:
-            _err(str(e))
-            return
-    except (ConnectionError, ValueError) as e:
-        _err(str(e))
-        return
-
-    _ok(f"{len(activities)} atividades carregadas.")
-
-    _section("Resultados")
-
-    artifacts = get_project_artifacts(activities)
-    if not artifacts:
-        _info("Nenhum artefato de projeto encontrado nesta turma.")
-        return
-
-    output_dir = _choose_output_dir()
-    paths = write_project_md(activities, section.section_caption, output_dir)
-    _ok(f"{len(artifacts)} artefatos encontrados.")
-    for p in paths:
-        _ok(f"[bold]{p}[/bold]")
-    console.print()
-
-    _reveal_in_finder(paths[0].parent)
-
-
-# ── ponderadas export ─────────────────────────────────────────────────────────
-
-def ponderadas_export() -> None:
-    """Gera um único .md com o detalhe de todas as ponderadas da turma, por semana."""
-    _section("Carregando")
-
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        _err(str(e))
-        return
-
-    config = _ensure_fresh_token(config)
-
-    console.print("  Buscando atividades...")
-    try:
-        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        section, activities = client.fetch_section_overview()
-    except KeyError as e:
-        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
-        return
-    except PermissionError:
-        try:
-            config = _recapture_and_reload()
-            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            section, activities = client.fetch_section_overview()
-        except (ConnectionError, ValueError) as e:
-            _err(str(e))
-            return
-    except (ConnectionError, ValueError) as e:
-        _err(str(e))
-        return
-
-    _ok(f"{len(activities)} atividades carregadas.")
-
-    _section("Resultados")
-
-    ponderadas = get_ponderadas(activities)
-    if not ponderadas:
-        _info("Nenhuma atividade ponderada encontrada nesta turma.")
-        return
-
-    output_dir = _choose_output_dir()
-    path = write_ponderadas_md(activities, section.section_caption, output_dir)
-    _ok(f"{len(ponderadas)} atividades ponderadas encontradas.")
-    _ok(f"[bold]{path}[/bold]")
-    console.print()
-
-    _reveal_in_finder(path.parent)
-
-
-# ── calendário export ─────────────────────────────────────────────────────────
-
-def calendario_export() -> None:
-    """Gera um único .md com todos os encontros da turma (Instrução e Orientação)."""
-    _section("Carregando")
-
-    try:
-        config = load_config()
-    except FileNotFoundError as e:
-        _err(str(e))
-        return
-
-    config = _ensure_fresh_token(config)
-    teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
-
-    console.print("  Buscando atividades...")
-    try:
-        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-        section, activities = client.fetch_section_overview()
-    except KeyError as e:
-        _err(f"config.json não possui a chave {e}. Execute o setup novamente.")
-        return
-    except PermissionError:
-        try:
-            config = _recapture_and_reload()
-            teacher_subjects = config.get("teacher_subjects", {})
-            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
-            section, activities = client.fetch_section_overview()
-        except (ConnectionError, ValueError) as e:
-            _err(str(e))
-            return
-    except (ConnectionError, ValueError) as e:
-        _err(str(e))
-        return
-
-    _ok(f"{len(activities)} atividades carregadas.")
-
-    _section("Resultados")
-
-    encontros = get_encontros(activities)
-    if not encontros:
-        _info("Nenhum encontro encontrado nesta turma.")
-        return
-
-    output_dir = _choose_output_dir()
-    path = write_calendario_md(activities, section.section_caption, teacher_subjects, output_dir)
-    _ok(f"{len(encontros)} encontros encontrados.")
-    _ok(f"[bold]{path}[/bold]")
-    console.print()
-
-    _reveal_in_finder(path.parent)
-
 
 # ── gerar tudo (turma) ────────────────────────────────────────────────────────
 
 def gerar_tudo_turma() -> None:
-    """Gera o dashboard interativo (Calendário, Projeto, Prova e Ponderadas
-    juntos num só HTML) a partir de uma única busca de atividades, e abre no
-    navegador — os arquivos .md de cada material continuam disponíveis em
-    Material › <opção>, ou pelo botão "Exportar dados" dentro do próprio
-    dashboard."""
+    """Gera o dashboard interativo (Calendário, Projeto, Prova, Ponderadas e
+    Turma juntos num só HTML) a partir de uma única busca de atividades, e
+    abre no navegador — os arquivos .md de cada material são gerados sob
+    demanda pelo próprio dashboard, no botão "Exportar dados" de cada aba."""
     _section("Carregando")
 
     try:
