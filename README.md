@@ -4,7 +4,7 @@ A Adalove concentra todas as informações acadêmicas do módulo, mas nem sempr
 
 Foi dessa necessidade que surgiu o **Adalove CLI**. No começo, a ideia era simplesmente facilitar meu próprio planejamento de estudos, reunindo os materiais para a prova e me dando uma visão mais clara da carga de cada sprint. Com o tempo, outras funcionalidades foram sendo adicionadas, transformando a ferramenta em um apoio para acompanhar o módulo de forma mais simples.
 
-Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em uma visão consolidada e organizada. Em poucos segundos, você consegue gerar, por exemplo, o **Calendário de aulas e ponderadas**, separado por sprint, **Todos os assuntos e links de autoestudo** das oito primeiras semanas, facilitando a preparação para a prova, e a **Lista de todos os artefatos do projeto**, organizada por sprint. Todo o conteúdo gerado é exportado em **Markdown** para uma pasta de sua escolha, facilitando a organização em diferentes ferramentas como Notion, Obsidian, Claude, etc.
+Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas informações em um **dashboard interativo único** (`dashboard.html`), com abas para **Calendário** (encontros e ponderadas por sprint), **Projeto** (artefatos por sprint), **Prova** (assuntos e links das oito primeiras semanas, por disciplina), **Ponderadas** e **Turma**. Cada aba tem seu próprio botão discreto de exportação para baixar aquele conteúdo em **Markdown**, facilitando levar pra Notion, Obsidian, Claude, etc.
 
 ![Adalove CLI em execução](images/cli.png)
 
@@ -12,19 +12,17 @@ Hoje, esse CLI se conecta diretamente à API da **Adalove** e reúne essas infor
 
 | Opção do menu | O que gera | Output |
 |---|---|---|
-| **Turma** | Turma, módulo e professores | só terminal |
-| **Exportar tudo** | Gera de uma vez as opções com \* abaixo| conjunto completo |
-| **Material › Calendário** \* | Resumo do módulo por semana (ponderadas + composição por disciplina) + encontros por sprint | Um arquivo |
-| **Material › Projeto** \* | Todos os artefatos do projeto | 6 arquivos (por sprint + unificado) |
-| **Material › Prova** \* | Assuntos e links das 8 primeiras semanas | 5 arquivos (por disciplina) |
-| **Material › Ponderadas** \* | Todas as ponderadas | Um arquivo |
-| **Material › Buscar** | Filtro livre por semana/disciplina | por disciplina |
-| **Dashboard** | Progresso acadêmico | só terminal |
+| **Abrir Dashboard** | HTML único com Calendário, Projeto, Prova, Ponderadas e Turma | `dashboard.html`, aberto direto no navegador |
+| **Progresso** | Frequência e progresso acadêmico | só terminal |
 | **Setup** | Credenciais e disciplinas | - |
 
-Em qualquer exportação, o CLI abre um seletor de pasta nativo do macOS perguntando onde salvar os arquivos, se você cancelar, ele usa a pasta `output/` do próprio projeto. Ao final, a pasta escolhida já abre sozinha no Finder.
+Ao escolher **Abrir Dashboard**, o CLI abre um seletor de pasta nativo do macOS perguntando onde salvar o `dashboard.html` (se você cancelar, ele usa a pasta `output/` do próprio projeto) e já abre o arquivo sozinho no navegador padrão. A partir daí, cada aba tem seu próprio botão de exportação em Markdown — veja o formato de cada um em [`docs/identificacao-e-exportacao.md`](docs/identificacao-e-exportacao.md).
 
-### Prévia dos materiais
+O filtro livre por semana/disciplina (antigo "Buscar") não está mais no menu interativo, mas continua disponível direto pelo comando `adalove fetch`.
+
+### Prévia do conteúdo dos materiais
+
+As imagens abaixo mostram o conteúdo em Markdown de cada material — mesmo formato usado tanto por `adalove fetch` quanto pelos botões "Exportar dados" de cada aba do dashboard.
 
 **Calendário** — resumo do módulo por semana, encontros e ponderadas por sprint:
 
@@ -85,29 +83,17 @@ Se preferir configurar manualmente (ex: Playwright não instalado):
 
 ## Estrutura dos arquivos gerados
 
-Caso você não escolha uma pasta para receber os materiais solicitados, tudo cai em `output/<turma>/`, onde `<turma>` é o identificador que a própria Adalove usa pra sua sessão (ex: `2026-2A-T17`) — assim, o material de turmas diferentes nunca se mistura:
+Caso você não escolha uma pasta ao abrir o Dashboard, tudo cai em `output/<turma>/`, onde `<turma>` é o identificador que a própria Adalove usa pra sua sessão (ex: `2026-2A-T17`) — assim, o material de turmas diferentes nunca se mistura:
 
 ```
 output/
   2026-2A-T17/
-    calendario.md          # Material › Calendário
-    projeto/                # Material › Projeto
-      projeto.md
-      sprint-1.md ... sprint-5.md
-    prova/                  # Material › Prova
-      matemática.md, programação.md, ...
-    ponderadas/              # Material › Ponderadas
-      ponderadas.md
-    buscar/                  # Material › Buscar
+    dashboard.html          # Abrir Dashboard
+    buscar/                  # adalove fetch
       <disciplina>_semana-<semanas>_<modo>.md
 ```
 
-![Pasta de saída completa](images/output-completo.png)
-
-Dentro de `projeto/` e `prova/`, um arquivo por sprint/disciplina, mais o consolidado:
-
-![Pasta do Projeto](images/arquivos-projeto.png)
-![Pasta da Prova](images/prova.png)
+Os `.md` de cada aba (Calendário, Projeto, Prova, Ponderadas) não são mais gerados automaticamente nessa pasta — eles saem sob demanda, um de cada vez, pelo botão "Exportar dados" de cada aba do `dashboard.html`, e o navegador os baixa na pasta de downloads padrão dele (não em `output/<turma>/`). O formato de cada um continua o mesmo descrito em [`docs/identificacao-e-exportacao.md`](docs/identificacao-e-exportacao.md).
 
 ## Estrutura do projeto
 
@@ -119,9 +105,9 @@ adalove/
   filters/     # filtragem e classificação de atividades (semana, disciplina,
                # artefatos de projeto, ponderadas, encontros do calendário)
   models/      # Activity, SectionInfo, StudentStatus, DashboardMetrics
-  writers/     # geração de cada arquivo Markdown de saída
+  writers/     # geração de cada arquivo Markdown de saída, e o dashboard.html (writers/html.py)
 cli/
-  main.py      # entry-point Typer com os menus interativos (Rich + questionary)
+  main.py      # entry-point Typer com o menu interativo (Rich + questionary)
 tests/         # testes unitários (pytest)
 output/        # arquivos gerados (gitignored)
 ```
