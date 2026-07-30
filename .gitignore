@@ -1,4 +1,3 @@
-docs/*
 output/*
 
 # contains live API credentials (bearer token)
