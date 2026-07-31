@@ -782,5 +782,21 @@ def fetch() -> None:
     _reveal_in_finder(paths[0].parent)
 
 
+# ── serve (local web server prototype) ─────────────────────────────────────────
+
+@app.command()
+def serve(port: int = 5000) -> None:
+    """Sobe um servidor local e abre o navegador — protótipo pra ir reduzindo o
+    uso do terminal: Setup e Abrir Dashboard viram páginas em vez de prompts."""
+    import threading
+
+    from cli.server import create_app
+
+    url = f"http://127.0.0.1:{port}/"
+    _ok(f"Servidor local em [bold]{url}[/bold]  [dim](Ctrl+C para parar)[/dim]")
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    create_app().run(port=port, debug=False)
+
+
 if __name__ == "__main__":
     app()
