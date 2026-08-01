@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adalove — Dashboard</title>
+<style>
+__STYLE__
+</style>
+</head>
+<body>
+<header>
+  <div class="tabs">
+    <button class="tab" data-view="calendario">Calendário</button>
+    <button class="tab" data-view="projeto">Projeto</button>
+    <button class="tab" data-view="prova">Prova</button>
+    <button class="tab" data-view="ponderadas">Ponderadas</button>
+    <button class="tab" data-view="turma">Turma</button>
+  </div>
+</header>
+<main>
+  <section class="view" id="view-calendario">
+    <div class="split-layout">
+      <div class="week-summary" id="resumo-table"></div>
+      <div class="split-divider"></div>
+      <div class="split-content" id="sprints"></div>
+    </div>
+  </section>
+  <section class="view" id="view-projeto">
+    <div class="split-layout">
+      <nav class="split-nav" id="projeto-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content" id="projeto-content"></div>
+    </div>
+  </section>
+  <section class="view" id="view-prova">
+    <div class="split-layout">
+      <nav class="split-nav" id="prova-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content">
+        <div class="kind-filter" id="prova-kind-filter">
+          <button class="active" data-kind="instrucoes">Instruções</button>
+          <button data-kind="autoestudo">Autoestudo</button>
+          <button data-kind="links">Links</button>
+        </div>
+        <p class="scope-note">Conteúdo das 8 primeiras semanas do módulo.</p>
+        <div id="prova-content"></div>
+      </div>
+    </div>
+  </section>
+  <section class="view" id="view-ponderadas">
+    <div class="split-layout">
+      <nav class="split-nav" id="ponderadas-nav"></nav>
+      <div class="split-divider"></div>
+      <div class="split-content" id="ponderadas-content"></div>
+    </div>
+  </section>
+  <section class="view" id="view-turma">
+    <div class="section">
+      <h2 id="turma-caption"></h2>
+      <dl class="info-list" id="turma-details"></dl>
+    </div>
+    <div class="section">
+      <h2>Disciplinas → Professores</h2>
+      <ul class="plain" id="turma-disciplinas"></ul>
+    </div>
+  </section>
+</main>
+<footer>
+  <span class="footer-meta"><span id="turma-name"></span> · Gerado em <span id="generated-at"></span></span>
+  <button class="export-link active" id="export-calendario" data-tab="calendario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-projeto" data-tab="projeto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+  <button class="export-link" id="export-prova" data-tab="prova"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados da matéria (.md)</span></button>
+  <button class="export-link" id="export-ponderadas" data-tab="ponderadas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>Exportar dados desta aba (.md)</span></button>
+</footer>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+__SCRIPT__
+</script>
+</body>
+</html>
