@@ -48,6 +48,12 @@ class _FakeClient:
     def fetch_section_overview(self):
         return self._section, self._activities
 
+    def fetch_sections(self):
+        return [
+            {"uuid": "sec1", "caption": "2026-2A-T17", "status": "closed", "date": "2026-08-01", "projectCaption": "Módulo 7"},
+            {"uuid": "sec2", "caption": "2026-2B-T17", "status": "open", "date": "2026-10-14", "projectCaption": "Módulo 8"},
+        ]
+
 
 def test_home_shows_setup_link_when_not_configured(client):
     resp = client.get("/")
@@ -131,3 +137,34 @@ def test_dashboard_view_renders_generated_html(client, monkeypatch):
     body = resp.get_data(as_text=True)
     assert "Aula Solo" in body
     assert "<script" in body
+
+
+def test_switch_turma_updates_config_and_redirects(client, monkeypatch):
+    from adalove.config.settings import load_config, save_config
+    save_config({"api_url": "https://apiv2.inteli.edu.br/sections/sec1/userdata", "token": "Bearer x", "teacher_subjects": {}})
+
+    activities = [make_activity(professor="Prof A", axis_caption="COM")]
+    monkeypatch.setattr("cli.server.AdaloveClient", lambda api_url, token: _FakeClient(api_url, token, activities))
+
+    resp = client.post("/turma", data={"section_uuid": "sec2"})
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "/dashboard"
+
+    saved = load_config()
+    assert "sec2" in saved["api_url"]
+
+
+def test_dashboard_with_section_query_param(client, monkeypatch):
+    from adalove.config.settings import load_config, save_config
+    save_config({"api_url": "https://apiv2.inteli.edu.br/sections/sec1/userdata", "token": "Bearer x", "teacher_subjects": {}})
+
+    activities = [make_activity(professor="Prof A", axis_caption="COM")]
+    monkeypatch.setattr("cli.server.AdaloveClient", lambda api_url, token: _FakeClient(api_url, token, activities))
+    monkeypatch.setattr("cli.server.token_expired", lambda token: False)
+
+    resp = client.get("/dashboard?section=sec2")
+    assert resp.status_code == 200
+
+    saved = load_config()
+    assert "sec2" in saved["api_url"]
+

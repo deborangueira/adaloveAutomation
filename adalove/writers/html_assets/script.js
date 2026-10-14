@@ -87,6 +87,47 @@ function makeExpandable(body) {
 document.getElementById('turma-name').textContent = DATA.turma;
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 
+(function renderTurmaSwitcher() {
+  const container = document.getElementById('turma-header-container');
+  if (!container) return;
+  const turmas = DATA.availableTurmas || [];
+  if (turmas.length === 0) {
+    const badgeSpan = el('span', 'badge neutral', DATA.turma);
+    container.appendChild(badgeSpan);
+    return;
+  }
+
+  const select = el('select', 'turma-select');
+  select.title = 'Alternar turma';
+
+  turmas.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.uuid || t.caption;
+    opt.dataset.caption = t.caption;
+    const statusLabel = t.status === 'open' ? ' (Aberta)' : '';
+    opt.textContent = `${t.caption}${statusLabel} — ${t.projectCaption || ''}`;
+    if (t.active || t.caption === DATA.turma) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', () => {
+    const selectedUuid = select.value;
+    const selectedOpt = select.selectedOptions[0];
+    const selectedCaption = selectedOpt ? selectedOpt.dataset.caption : '';
+
+    if (window.location.protocol.startsWith('http')) {
+      window.location.href = `/dashboard?section=${encodeURIComponent(selectedUuid)}`;
+    } else if (selectedCaption && selectedCaption !== DATA.turma) {
+      window.location.href = `../${selectedCaption}/dashboard.html`;
+    }
+  });
+
+  container.appendChild(select);
+})();
+
+
 // ── Resumo do módulo (transposto: semanas viram linhas) ───────────────────
 const SUBJECT_ABBR = {
   'Programação': 'Prog', 'Matemática': 'Mat', 'Negócios': 'Neg',

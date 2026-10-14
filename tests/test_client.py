@@ -205,3 +205,32 @@ def test_fetch_dashboard_data_missing_section_returns_empty_date(client):
         _, _, section_date = client.fetch_dashboard_data()
 
     assert section_date == ""
+
+
+def test_build_section_url():
+    url = AdaloveClient.build_section_url("0aaf5f08fd1de128220ef7673e1ceb2d")
+    assert url == "https://apiv2.inteli.edu.br/sections/0aaf5f08fd1de128220ef7673e1ceb2d/userdata"
+
+
+def test_fetch_sections_success(client):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"uuid": "abc", "caption": "2026-2B-T17", "status": "open"}
+    ]
+
+    with patch.object(client._session, "get", return_value=mock_response):
+        sections = client.fetch_sections()
+
+    assert len(sections) == 1
+    assert sections[0]["caption"] == "2026-2B-T17"
+
+
+def test_fetch_sections_raises_on_401(client):
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+
+    with patch.object(client._session, "get", return_value=mock_response):
+        with pytest.raises(PermissionError, match=SESSION_EXPIRED_MESSAGE):
+            client.fetch_sections()
+

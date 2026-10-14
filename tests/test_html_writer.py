@@ -229,3 +229,15 @@ def test_export_buttons_present_for_each_section(tmp_output):
     html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")
     for section in ("calendario", "projeto", "prova", "ponderadas"):
         assert f'id="export-{section}"' in html
+
+
+def test_write_html_dashboard_includes_available_turmas(tmp_output):
+    activities = [make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z")]
+    turmas = [{"uuid": "sec1", "caption": "2026-2B-T17", "status": "open"}]
+    html = write_html_dashboard(
+        activities, make_section("2026-2B-T17"), TEACHER_SUBJECTS, tmp_output, available_turmas=turmas
+    ).read_text(encoding="utf-8")
+    data = _embedded_data(html)
+    assert data["availableTurmas"] == turmas
+    assert 'id="turma-header-container"' in html
+

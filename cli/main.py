@@ -1,9 +1,28 @@
 import platform
+import re
 import subprocess
 import sys
 import math
 import webbrowser
 from pathlib import Path
+
+
+def _extract_section_uuid(api_url: str) -> str | None:
+    match = re.search(r"/sections/([a-f0-9]+)", api_url)
+    return match.group(1) if match else None
+
+
+def _build_section_url(section_uuid: str) -> str:
+    return f"https://apiv2.inteli.edu.br/sections/{section_uuid}/userdata"
+
+
+def _sort_sections(secs: list[dict]) -> list[dict]:
+    return sorted(
+        secs,
+        key=lambda s: (0 if s.get("status") == "open" else 1, -(int((s.get("date") or "0").replace("-", "") or 0))),
+    )
+
+
 
 # When the venv python binary is a symlink to the system interpreter, venv
 # detection can fail and site-packages won't include the venv's packages.
@@ -346,9 +365,21 @@ def main(ctx: typer.Context) -> None:
     while True:
         _header("Gerenciador de Atividades")
 
+        turma_info = ""
+        try:
+            cfg = load_config()
+            caption = cfg.get("section_caption")
+            if not caption:
+                uuid = _extract_section_uuid(cfg.get("api_url", ""))
+                caption = uuid[:8] if uuid else None
+            if caption:
+                turma_info = f"[dim]Turma ativa: [bold cyan]{caption}[/bold cyan][/dim]\n"
+        except Exception:
+            pass
+
         _window(
             "Menu Principal",
-            "[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
+            f"{turma_info}[dim]↑ ↓  navegar    Enter  confirmar[/dim]",
         )
         console.print()
 
@@ -356,9 +387,10 @@ def main(ctx: typer.Context) -> None:
             "Escolha uma opção:",
             choices=[
                 questionary.Choice("  Abrir Dashboard —  Calendário, Projeto, Prova e Ponderadas em um só HTML", value="tudo"),
-                questionary.Choice("  Progresso       —  Ver frequência e progresso",                       value="dashboard"),
-                questionary.Choice("  Setup           —  Configurar credenciais e mapeamento de professores", value="setup"),
-                questionary.Choice("  Sair",                                                                 value="exit"),
+                questionary.Choice("  Trocar Turma    —  Selecionar qual turma visualizar",                      value="turma"),
+                questionary.Choice("  Progresso       —  Ver frequência e progresso",                             value="dashboard"),
+                questionary.Choice("  Setup           —  Configurar credenciais e mapeamento de professores",       value="setup"),
+                questionary.Choice("  Sair",                                                                       value="exit"),
             ],
             style=STYLE,
         ).ask()
@@ -369,12 +401,100 @@ def main(ctx: typer.Context) -> None:
         try:
             if choice == "setup":
                 check(ctx)
+            elif choice == "turma":
+                escolher_turma()
             elif choice == "tudo":
                 gerar_tudo_turma()
             elif choice == "dashboard":
                 dashboard()
         except typer.Exit:
             pass
+
+
+# ── escolher turma ────────────────────────────────────────────────────────────
+
+@app.command(name="turma")
+def escolher_turma() -> None:
+    """Permite ao usuário escolher qual turma deseja ativar."""
+    _section("Escolher Turma")
+
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        _err(str(e))
+        return
+
+    config = _ensure_fresh_token(config)
+
+    console.print("  Buscando turmas disponíveis...")
+    try:
+        client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+        sections = client.fetch_sections()
+    except PermissionError:
+        try:
+            config = _recapture_and_reload()
+            client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+            sections = client.fetch_sections()
+        except (ConnectionError, ValueError) as e:
+            _err(str(e))
+            return
+    except (ConnectionError, ValueError) as e:
+        _err(str(e))
+        return
+
+    if not sections:
+        _err("Nenhuma turma encontrada na API.")
+        return
+
+    sorted_sections = _sort_sections(sections)
+    current_uuid = _extract_section_uuid(config.get("api_url", ""))
+
+    choices = []
+    for s in sorted_sections:
+        uuid = s.get("uuid", "")
+        caption = s.get("caption", "Sem nome")
+        proj = s.get("projectCaption", "")
+        status = "Aberta" if s.get("status") == "open" else "Fechada"
+        is_current = uuid == current_uuid
+        marker = " [atual]" if is_current else ""
+        title = f"{caption} — {proj} ({status}){marker}"
+        choices.append(questionary.Choice(title=title, value=s))
+
+    selected = questionary.select(
+        "Selecione a turma:",
+        choices=choices,
+        style=STYLE,
+    ).ask()
+
+    if not selected:
+        _err("Cancelado.")
+        return
+
+    selected_uuid = selected.get("uuid")
+    new_api_url = _build_section_url(selected_uuid)
+    config["api_url"] = new_api_url
+    config["section_caption"] = selected.get("caption")
+
+    console.print()
+    console.print(f"  Carregando dados de [bold]{selected.get('caption')}[/bold]...")
+    try:
+        client = AdaloveClient(api_url=new_api_url, token=config["token"])
+        sec, activities = client.fetch_section_overview()
+        config["section_caption"] = sec.section_caption
+        teachers = get_unique_teachers(activities)
+        inferred = infer_teacher_subjects(activities)
+        teacher_subjects = config.get("teacher_subjects", {})
+        for t in teachers:
+            if t not in teacher_subjects and t in inferred:
+                teacher_subjects[t] = inferred[t]
+        config["teacher_subjects"] = teacher_subjects
+    except Exception as e:
+        _info(f"Aviso ao carregar atividades: {e}")
+
+    save_config(config)
+    _ok(f"Turma ativa alterada para [bold]{selected.get('caption')}[/bold] — {selected.get('projectCaption')}.")
+    console.print()
+
 
 
 # ── check ─────────────────────────────────────────────────────────────────────
@@ -464,8 +584,40 @@ def _run_setup(api_url: str, token: str) -> None:
 
     console.print()
     console.print("  Validando credenciais...")
+    selected_caption = ""
     try:
         client = AdaloveClient(api_url=api_url, token=token)
+        sections = []
+        try:
+            if hasattr(client, "fetch_sections"):
+                sections = client.fetch_sections()
+        except Exception:
+            pass
+
+        if len(sections) > 1:
+            _section("Seleção de Turma")
+            sorted_sections = _sort_sections(sections)
+            current_uuid = _extract_section_uuid(api_url)
+            choices = []
+            for s in sorted_sections:
+                uuid = s.get("uuid", "")
+                caption = s.get("caption", "Sem nome")
+                proj = s.get("projectCaption", "")
+                status = "Aberta" if s.get("status") == "open" else "Fechada"
+                marker = " [atual]" if uuid == current_uuid else ""
+                title = f"{caption} — {proj} ({status}){marker}"
+                choices.append(questionary.Choice(title=title, value=s))
+
+            selected = questionary.select(
+                "Escolha a turma que deseja utilizar:",
+                choices=choices,
+                style=STYLE,
+            ).ask()
+            if selected:
+                api_url = _build_section_url(selected.get("uuid"))
+                selected_caption = selected.get("caption")
+                client = AdaloveClient(api_url=api_url, token=token)
+
         activities = client.fetch_activities()
     except PermissionError as e:
         _err(str(e))
@@ -511,11 +663,14 @@ def _run_setup(api_url: str, token: str) -> None:
                 raise typer.Exit(0)
             teacher_subjects[teacher] = subject
 
-    save_config({
+    cfg_data = {
         "api_url": api_url,
         "token": token,
         "teacher_subjects": teacher_subjects,
-    })
+    }
+    if selected_caption:
+        cfg_data["section_caption"] = selected_caption
+    save_config(cfg_data)
 
     _section("Concluído")
     _ok("Configuração salva em config.json.")
@@ -562,6 +717,13 @@ def _recapture_and_reload() -> dict:
     Raises typer.Exit(1) if the user's Adalove browser session itself is invalid
     (capture_credentials raised PermissionError) — there's nothing to fall back to there.
     """
+    old_uuid = None
+    try:
+        old_config = load_config()
+        old_uuid = _extract_section_uuid(old_config.get("api_url", ""))
+    except Exception:
+        pass
+
     _err("Token expirado ou inválido.")
     console.print()
     _info("Configurando sessão automaticamente pelo navegador...")
@@ -583,6 +745,9 @@ def _recapture_and_reload() -> dict:
         _info("Voltando para configuração manual.")
         console.print()
         api_url, new_token = _prompt_credentials()
+
+    if old_uuid:
+        api_url = _build_section_url(old_uuid)
 
     console.print()
     _run_setup(api_url, new_token)
@@ -645,7 +810,26 @@ def gerar_tudo_turma() -> None:
 
     output_dir = _choose_output_dir()
 
-    dashboard_path = write_html_dashboard(activities, section, teacher_subjects, output_dir)
+    available_turmas = None
+    try:
+        sections = client.fetch_sections()
+        current_uuid = _extract_section_uuid(config.get("api_url", ""))
+        available_turmas = [
+            {
+                "uuid": s.get("uuid"),
+                "caption": s.get("caption"),
+                "projectCaption": s.get("projectCaption"),
+                "status": s.get("status"),
+                "active": (s.get("uuid") == current_uuid) or (s.get("caption") == section.section_caption),
+            }
+            for s in _sort_sections(sections)
+        ]
+    except Exception:
+        pass
+
+    dashboard_path = write_html_dashboard(
+        activities, section, teacher_subjects, output_dir, available_turmas=available_turmas
+    )
     _ok(f"Dashboard  —  [bold]{dashboard_path}[/bold]")
 
     console.print()

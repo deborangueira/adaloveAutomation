@@ -291,7 +291,12 @@ def _build_ponderadas(ponderadas: list[Activity], subjects_by_teacher: dict[str,
     ]
 
 
-def _build_data(activities: list[Activity], section: SectionInfo, teacher_subjects: dict[str, str]) -> dict:
+def _build_data(
+    activities: list[Activity],
+    section: SectionInfo,
+    teacher_subjects: dict[str, str],
+    available_turmas: list[dict] | None = None,
+) -> dict:
     encontros = get_encontros(activities)
     ponderadas = get_ponderadas(activities)
     artifacts = get_project_artifacts(activities)
@@ -305,6 +310,7 @@ def _build_data(activities: list[Activity], section: SectionInfo, teacher_subjec
     return {
         "turma": section.section_caption or _UNKNOWN_TURMA,
         "generatedAt": date.today().isoformat(),
+        "availableTurmas": available_turmas or [],
         "subjectColors": SUBJECT_COLORS,
         "turmaInfo": {
             "caption": section.section_caption,
@@ -330,6 +336,7 @@ def write_html_dashboard(
     section: SectionInfo,
     teacher_subjects: dict[str, str],
     output_dir: Path | None = None,
+    available_turmas: list[dict] | None = None,
 ) -> Path:
     """Write a single <output_dir>/<turma>/dashboard.html (output_dir defaults
     to OUTPUT_DIR), overwritten on every run — an interactive, self-contained
@@ -340,7 +347,7 @@ def write_html_dashboard(
     client-side and downloads it (the page has no server to call the writer
     functions directly once it's open in a browser).
     """
-    data = _build_data(activities, section, teacher_subjects)
+    data = _build_data(activities, section, teacher_subjects, available_turmas=available_turmas)
     # The JSON sits inside a <script type="application/json"> tag as inert
     # text, parsed via JSON.parse() in JS — never interpreted as markup or
     # code, so a caption containing "</script>" can't break out of the tag or

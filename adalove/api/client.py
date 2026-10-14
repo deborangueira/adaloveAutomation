@@ -47,6 +47,31 @@ class AdaloveClient:
             "Sec-Fetch-Site": "same-site",
         })
 
+    @staticmethod
+    def build_section_url(section_uuid: str) -> str:
+        return f"https://apiv2.inteli.edu.br/sections/{section_uuid}/userdata"
+
+    def fetch_sections(self) -> list[dict]:
+        url = "https://apiv2.inteli.edu.br/sections"
+        try:
+            response = self._session.get(url, timeout=30)
+        except UnicodeEncodeError as e:
+            raise ValueError(
+                f"Token contém caracteres não-ASCII ({e}). "
+                "Execute 'adalove setup' novamente e copie o token bruto do devtools."
+            ) from e
+        except requests.RequestException as e:
+            raise ConnectionError(str(e)) from e
+
+        if response.status_code in (401, 403):
+            raise PermissionError(SESSION_EXPIRED_MESSAGE)
+
+        response.raise_for_status()
+
+        data = response.json()
+        return data if isinstance(data, list) else []
+
+
     def fetch_activities(self) -> list[Activity]:
         try:
             response = self._session.get(self._api_url, timeout=30)

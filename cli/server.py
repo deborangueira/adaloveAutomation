@@ -10,6 +10,7 @@ exactly as before, this is an additive way in, not a replacement (yet).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from flask import Flask, redirect, render_template_string, request, url_for
@@ -66,23 +67,89 @@ def _error_page(message: str, back_href: str = "/") -> str:
     """)
 
 
+def _extract_uuid(url: str) -> str | None:
+    m = re.search(r"/sections/([a-f0-9]+)", url)
+    return m.group(1) if m else None
+
+
+def _build_section_url(section_uuid: str) -> str:
+    return f"https://apiv2.inteli.edu.br/sections/{section_uuid}/userdata"
+
+
+def _sort_sections(secs: list[dict]) -> list[dict]:
+    return sorted(
+        secs,
+        key=lambda s: (0 if s.get("status") == "open" else 1, -(int((s.get("date") or "0").replace("-", "") or 0))),
+    )
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
 
     @app.get("/")
     def home():
         try:
-            load_config()
+            config = load_config()
             configured = True
         except FileNotFoundError:
             configured = False
 
         if configured:
-            body = """
+            current_uuid = _extract_uuid(config.get("api_url", ""))
+            sections = []
+            try:
+                client = AdaloveClient(api_url=config["api_url"], token=config["token"])
+                if hasattr(client, "fetch_sections"):
+                    sections = _sort_sections(client.fetch_sections())
+            except Exception:
+                sections = []
+
+            current_caption = config.get("section_caption") or ""
+            current_project = ""
+            current_status = ""
+            if sections:
+                for s in sections:
+                    if s.get("uuid") == current_uuid or (not current_uuid and not current_caption):
+                        current_caption = s.get("caption", "")
+                        current_project = s.get("projectCaption", "")
+                        current_status = "Aberta" if s.get("status") == "open" else "Fechada"
+                        break
+
+            if not current_caption:
+                current_caption = current_uuid or "Turma ativa"
+
+            turma_options = ""
+            if sections:
+                turma_options = "".join(
+                    f'<option value="{s.get("uuid")}" {"selected" if s.get("uuid") == current_uuid else ""}>'
+                    f'{s.get("caption")} ({"Aberta" if s.get("status") == "open" else "Fechada"}) — {s.get("projectCaption", "")}'
+                    f'</option>'
+                    for s in sections
+                )
+
+            body = f"""
               <h1>Adalove</h1>
               <p class="sub">Credenciais configuradas.</p>
               <div class="card">
-                <a class="btn" href="/dashboard">Abrir Dashboard</a>
+                <label style="margin-top:0">Turma selecionada</label>
+                <div style="font-size:1.15rem;font-weight:600;margin-bottom:0.25rem;">
+                  {current_caption} {f'<span style="font-size:0.75rem;font-weight:normal;padding:2px 8px;border-radius:12px;background:var(--accent);color:#fff;vertical-align:middle;margin-left:0.4rem;">{current_status}</span>' if current_status else ''}
+                </div>
+                {f'<p style="color:var(--muted);font-size:0.85rem;margin:0 0 1.25rem;">{current_project}</p>' if current_project else '<div style="margin-bottom:1rem;"></div>'}
+                
+                <a class="btn" href="/dashboard" style="margin-bottom:1.25rem;">Abrir Dashboard</a>
+
+                {f'''
+                <form method="post" action="/turma">
+                  <label>Escolher outra turma</label>
+                  <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.3rem;">
+                    <select name="section_uuid" style="flex:1;">
+                      {turma_options}
+                    </select>
+                    <button class="btn secondary" type="submit" style="white-space:nowrap;padding:0.55rem 1rem;">Trocar</button>
+                  </div>
+                </form>
+                ''' if turma_options else ''}
               </div>
               <a class="btn secondary" href="/setup">Reconfigurar credenciais</a>
             """
@@ -93,6 +160,31 @@ def create_app() -> Flask:
               <a class="btn" href="/setup">Configurar credenciais</a>
             """
         return _page(body)
+
+    @app.post("/turma")
+    def switch_turma():
+        section_uuid = request.form.get("section_uuid")
+        if not section_uuid:
+            return redirect(url_for("home"))
+        try:
+            config = load_config()
+        except FileNotFoundError:
+            return redirect(url_for("home"))
+
+        new_api_url = _build_section_url(section_uuid)
+        config["api_url"] = new_api_url
+        client = AdaloveClient(api_url=new_api_url, token=config["token"])
+        try:
+            sec, acts = client.fetch_section_overview()
+            config["section_caption"] = sec.section_caption
+            inferred = infer_teacher_subjects(acts)
+            for t in get_unique_teachers(acts):
+                if t not in config.get("teacher_subjects", {}) and t in inferred:
+                    config.setdefault("teacher_subjects", {})[t] = inferred[t]
+        except Exception:
+            pass
+        save_config(config)
+        return redirect(url_for("dashboard_view"))
 
     @app.get("/setup")
     def setup_start():
@@ -204,25 +296,68 @@ def create_app() -> Flask:
         except FileNotFoundError:
             return redirect(url_for("home"))
 
+        req_section = request.args.get("section")
+        if req_section:
+            new_api_url = _build_section_url(req_section)
+            if new_api_url != config.get("api_url"):
+                config["api_url"] = new_api_url
+                client = AdaloveClient(api_url=new_api_url, token=config["token"])
+                try:
+                    sec, acts = client.fetch_section_overview()
+                    config["section_caption"] = sec.section_caption
+                    inferred = infer_teacher_subjects(acts)
+                    for t in get_unique_teachers(acts):
+                        if t not in config.get("teacher_subjects", {}) and t in inferred:
+                            config.setdefault("teacher_subjects", {})[t] = inferred[t]
+                except Exception:
+                    pass
+                save_config(config)
+
         if token_expired(config.get("token", "")):
             try:
                 from adalove.browser.capture import capture_credentials
                 api_url, token = capture_credentials()
             except (ImportError, PermissionError, TimeoutError, ValueError) as e:
                 return _error_page(f"Token expirado e recaptura automática falhou: {e}", back_href="/setup/manual")
-            config["api_url"], config["token"] = api_url, token
+            curr_uuid = _extract_uuid(config.get("api_url", ""))
+            if curr_uuid:
+                config["api_url"] = _build_section_url(curr_uuid)
+            else:
+                config["api_url"] = api_url
+            config["token"] = token
             save_config(config)
 
         teacher_subjects: dict[str, str] = config.get("teacher_subjects", {})
         client = AdaloveClient(api_url=config["api_url"], token=config["token"])
         try:
             section, activities = client.fetch_section_overview()
+            config["section_caption"] = section.section_caption
+            save_config(config)
         except PermissionError:
             return _error_page("Sessão expirada — reconfigure as credenciais.", back_href="/setup")
         except (ConnectionError, ValueError) as e:
             return _error_page(str(e))
 
-        path = write_html_dashboard(activities, section, teacher_subjects, OUTPUT_ROOT)
+        sections = []
+        try:
+            if hasattr(client, "fetch_sections"):
+                sections = _sort_sections(client.fetch_sections())
+        except Exception:
+            sections = []
+
+        current_uuid = _extract_uuid(config.get("api_url", ""))
+        available_turmas = [
+            {
+                "uuid": s.get("uuid"),
+                "caption": s.get("caption"),
+                "projectCaption": s.get("projectCaption"),
+                "status": s.get("status"),
+                "active": (s.get("uuid") == current_uuid) or (s.get("caption") == section.section_caption),
+            }
+            for s in sections
+        ] if sections else None
+
+        path = write_html_dashboard(activities, section, teacher_subjects, OUTPUT_ROOT, available_turmas=available_turmas)
         return path.read_text(encoding="utf-8")
 
     return app
