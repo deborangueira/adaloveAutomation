@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
+import signal
+import subprocess
+import sys
+import threading
 import time
 from pathlib import Path
 
@@ -15,6 +21,20 @@ _API_PATH = "/userdata"
 _PROFILE_DIR = Path.home() / ".adalove-browser"
 _POLL_MS = 300
 _LOGIN_WAIT_MS = 180_000
+# Hard ceiling for the isolated capture: the login window plus slack for
+# launching Chromium and the initial page load. Past this, the child (and its
+# whole process group — Playwright driver + Chromium) is killed.
+_ISOLATED_TIMEOUT_S = _LOGIN_WAIT_MS / 1000 + 60
+
+_ERROR_TYPES: dict[str, type[Exception]] = {
+    "ImportError": ImportError,
+    "PermissionError": PermissionError,
+    "TimeoutError": TimeoutError,
+    "ValueError": ValueError,
+}
+
+_active_children: set[subprocess.Popen] = set()
+_active_lock = threading.Lock()
 
 
 def _best_response(captured: list[tuple[str, str, int]]) -> tuple[str, str]:
@@ -92,3 +112,90 @@ def capture_credentials() -> tuple[str, str]:
         raise TimeoutError(f"Falha na captura pelo navegador: {exc}") from exc
 
     return _best_response(captured)
+
+
+def capture_credentials_isolated(timeout: float = _ISOLATED_TIMEOUT_S) -> tuple[str, str]:
+    """Same contract as capture_credentials(), but runs it in a child process
+    with a hard timeout.
+
+    Meant for long-lived callers (the local web server): if Playwright hangs —
+    e.g. the venv's playwright was upgraded under a server that has been
+    running for days — the child is killed along with its driver/Chromium
+    instead of pinning a request thread (and a stray driver) forever.
+    """
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in sys.path if p))
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "adalove.browser.capture"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,  # own process group, so we can kill driver + Chromium too
+    )
+    with _active_lock:
+        _active_children.add(proc)
+    try:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
+            raise TimeoutError(
+                f"A captura pelo navegador não terminou em {int(timeout)}s e foi cancelada."
+            ) from None
+    finally:
+        with _active_lock:
+            _active_children.discard(proc)
+    return _parse_child_output(out, err)
+
+
+def kill_active_captures() -> None:
+    """Kill any isolated capture still running — called when the server exits so
+    no Chromium/driver outlives it."""
+    with _active_lock:
+        procs = list(_active_children)
+    for proc in procs:
+        _kill_tree(proc)
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, AttributeError):
+        # AttributeError: no killpg on Windows — fall back to the child alone.
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+    try:
+        proc.communicate(timeout=5)
+    except (subprocess.TimeoutExpired, ValueError):
+        pass
+
+
+def _parse_child_output(out: str, err: str) -> tuple[str, str]:
+    lines = [line for line in (out or "").splitlines() if line.strip()]
+    try:
+        result = json.loads(lines[-1])
+    except (IndexError, json.JSONDecodeError):
+        detail = (err or "").strip()[-500:] or "sem saída"
+        raise TimeoutError(f"Falha na captura pelo navegador: {detail}") from None
+    if result.get("ok"):
+        return result["api_url"], result["token"]
+    exc_type = _ERROR_TYPES.get(result.get("error", ""), TimeoutError)
+    raise exc_type(result.get("message", "Falha na captura pelo navegador."))
+
+
+def _main() -> int:
+    """Child-process entry point for capture_credentials_isolated(): prints a
+    single JSON line with the result or the error."""
+    try:
+        api_url, token = capture_credentials()
+        result = {"ok": True, "api_url": api_url, "token": token}
+    except (ImportError, PermissionError, TimeoutError, ValueError) as e:
+        result = {"ok": False, "error": type(e).__name__, "message": str(e)}
+    print(json.dumps(result), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())

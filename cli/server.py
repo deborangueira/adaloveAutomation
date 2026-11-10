@@ -11,6 +11,7 @@ exactly as before, this is an additive way in, not a replacement (yet).
 from __future__ import annotations
 
 import re
+import threading
 from pathlib import Path
 
 from flask import Flask, redirect, render_template_string, request, url_for
@@ -20,6 +21,7 @@ from adalove.config.settings import load_config, save_config
 from adalove.config.subjects import SUBJECTS
 from adalove.filters.activity import get_unique_teachers, infer_teacher_subjects
 from adalove.writers.html import write_html_dashboard
+from cli.server_runtime import IdleWatchdog, interrupt_main_process
 
 OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
 
@@ -83,8 +85,70 @@ def _sort_sections(secs: list[dict]) -> list[dict]:
     )
 
 
-def create_app() -> Flask:
+class CaptureInProgress(Exception):
+    """Another request is already waiting on the browser login."""
+
+
+def _capture_credentials() -> tuple[str, str]:
+    # Isolated in a child process with a hard timeout: a hung Playwright can't
+    # pin a request thread (or leave a stray driver behind) forever.
+    from adalove.browser.capture import capture_credentials_isolated
+
+    return capture_credentials_isolated()
+
+
+def _waiting_page(next_href: str) -> str:
+    return _page(f"""
+      <meta http-equiv="refresh" content="3;url=/capture/wait?next={next_href}">
+      <h1>Aguardando login…</h1>
+      <p class="sub">Uma janela do navegador foi aberta para você entrar no Adalove.
+      Faça login nela — esta página continua sozinha quando terminar.</p>
+      <a class="btn secondary" href="/">← Voltar ao início</a>
+    """)
+
+
+def create_app(idle_timeout: float | None = None) -> Flask:
+    """idle_timeout: seconds without requests before the server shuts itself
+    down (None disables it — tests and embedding)."""
     app = Flask(__name__)
+    capture_lock = threading.Lock()
+
+    def run_capture() -> tuple[str, str]:
+        """Only one browser capture at a time — extra clicks get a waiting
+        page instead of piling up Chromium windows."""
+        if not capture_lock.acquire(blocking=False):
+            raise CaptureInProgress
+        try:
+            return _capture_credentials()
+        finally:
+            capture_lock.release()
+
+    if idle_timeout:
+        watchdog = IdleWatchdog(idle_timeout, on_idle=interrupt_main_process)
+        app.before_request(lambda: watchdog.request_started())
+
+        @app.teardown_request
+        def _finished(_exc):
+            watchdog.request_finished()
+
+        watchdog.start()
+
+    @app.get("/capture/wait")
+    def capture_wait():
+        next_href = request.args.get("next", "/")
+        if next_href not in ("/", "/dashboard"):
+            next_href = "/"
+        if capture_lock.locked():
+            return _waiting_page(next_href)
+        # Capture finished: go on only if it actually left us a valid token,
+        # otherwise back home — never silently start another browser window.
+        try:
+            config = load_config()
+        except FileNotFoundError:
+            return redirect(url_for("home"))
+        if next_href == "/dashboard" and not token_expired(config.get("token", "")):
+            return redirect(url_for("dashboard_view"))
+        return redirect(url_for("home"))
 
     @app.get("/")
     def home():
@@ -189,12 +253,11 @@ def create_app() -> Flask:
     @app.get("/setup")
     def setup_start():
         try:
-            from adalove.browser.capture import capture_credentials
+            api_url, token = run_capture()
+        except CaptureInProgress:
+            return _waiting_page("/")
         except ImportError:
             return redirect(url_for("setup_manual"))
-
-        try:
-            api_url, token = capture_credentials()
         except (PermissionError, TimeoutError, ValueError) as e:
             return _error_page(f"Captura automática falhou: {e}")
         return _finish_setup(api_url, token)
@@ -315,8 +378,9 @@ def create_app() -> Flask:
 
         if token_expired(config.get("token", "")):
             try:
-                from adalove.browser.capture import capture_credentials
-                api_url, token = capture_credentials()
+                api_url, token = run_capture()
+            except CaptureInProgress:
+                return _waiting_page("/dashboard")
             except (ImportError, PermissionError, TimeoutError, ValueError) as e:
                 return _error_page(f"Token expirado e recaptura automática falhou: {e}", back_href="/setup/manual")
             curr_uuid = _extract_uuid(config.get("api_url", ""))

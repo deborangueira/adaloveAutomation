@@ -168,3 +168,101 @@ def test_dashboard_with_section_query_param(client, monkeypatch):
     saved = load_config()
     assert "sec2" in saved["api_url"]
 
+
+
+# ── browser capture: one at a time, never hangs the page ──────────────────────
+
+def test_second_click_during_capture_gets_waiting_page(client, monkeypatch):
+    import threading
+
+    from adalove.config.settings import save_config
+    save_config({"api_url": "https://apiv2.inteli.edu.br/sections/sec1/userdata", "token": "Bearer x", "teacher_subjects": {}})
+    monkeypatch.setattr("cli.server.token_expired", lambda token: True)
+
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def slow_capture():
+        calls.append(1)
+        started.set()
+        release.wait(5)
+        raise PermissionError("Login não detectado")
+
+    monkeypatch.setattr("cli.server._capture_credentials", slow_capture)
+
+    first = {}
+    t = threading.Thread(target=lambda: first.setdefault("resp", client.application.test_client().get("/dashboard")))
+    t.start()
+    assert started.wait(5)
+
+    resp = client.get("/dashboard")
+    body = resp.get_data(as_text=True)
+    assert "Aguardando login" in body
+    assert "/capture/wait?next=/dashboard" in body
+    assert client.get("/setup").get_data(as_text=True).count("Aguardando login") == 1
+    assert "Aguardando login" in client.get("/capture/wait?next=/dashboard").get_data(as_text=True)
+
+    release.set()
+    t.join(5)
+    assert len(calls) == 1  # extra clicks never started another browser
+    assert "Login não detectado" in first["resp"].get_data(as_text=True)
+
+
+def test_capture_wait_after_failed_capture_goes_home(client, monkeypatch):
+    from adalove.config.settings import save_config
+    save_config({"api_url": "https://example.com", "token": "Bearer x", "teacher_subjects": {}})
+    monkeypatch.setattr("cli.server.token_expired", lambda token: True)
+
+    resp = client.get("/capture/wait?next=/dashboard")
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "/"
+
+
+def test_capture_wait_after_successful_capture_continues(client, monkeypatch):
+    from adalove.config.settings import save_config
+    save_config({"api_url": "https://example.com", "token": "Bearer x", "teacher_subjects": {}})
+    monkeypatch.setattr("cli.server.token_expired", lambda token: False)
+
+    resp = client.get("/capture/wait?next=/dashboard")
+    assert resp.headers["Location"] == "/dashboard"
+
+
+def test_capture_wait_rejects_open_redirect(client):
+    resp = client.get("/capture/wait?next=https://evil.example")
+    assert resp.headers["Location"] == "/"
+
+
+def test_setup_falls_back_to_manual_without_playwright(client, monkeypatch):
+    def no_playwright():
+        raise ImportError("Playwright não está instalado.")
+
+    monkeypatch.setattr("cli.server._capture_credentials", no_playwright)
+    resp = client.get("/setup")
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "/setup/manual"
+
+
+def test_idle_timeout_middleware_tracks_requests(tmp_path, monkeypatch):
+    from cli import server
+
+    created = []
+
+    class _FakeWatchdog:
+        def __init__(self, idle_seconds, on_idle):
+            self.started = self.finished = 0
+            created.append(self)
+
+        def request_started(self):
+            self.started += 1
+
+        def request_finished(self):
+            self.finished += 1
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(server, "IdleWatchdog", _FakeWatchdog)
+    monkeypatch.setattr(server, "OUTPUT_ROOT", tmp_path / "output")
+    c = server.create_app(idle_timeout=60).test_client()
+    c.get("/")
+    assert created[0].started == 1 and created[0].finished == 1
