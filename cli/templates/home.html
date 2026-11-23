@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block body %}
+  <h1>Adalove</h1>
+{% if not configured %}
+  <p class="sub">Ainda sem credenciais configuradas.</p>
+  <a class="btn" href="/setup">Configurar credenciais</a>
+{% else %}
+  <p class="sub">Credenciais configuradas.</p>
+  <div class="card">
+    <label style="margin-top:0">Turma selecionada</label>
+    <div class="turma-name">
+      {{ current_caption }}{% if current_status %}<span class="status-pill">{{ current_status }}</span>{% endif %}
+    </div>
+    {% if current_project %}<p class="turma-project">{{ current_project }}</p>{% else %}<div style="margin-bottom:1rem"></div>{% endif %}
+
+    <a class="btn" href="/dashboard" style="margin-bottom:1.25rem">Abrir Dashboard</a>
+
+    {% if sections %}
+    <form method="post" action="/turma">
+      <label>Escolher outra turma</label>
+      <div class="inline-form">
+        <select name="section_uuid">
+          {% for s in sections %}
+          <option value="{{ s.uuid }}"{% if s.uuid == current_uuid %} selected{% endif %}>{{ s.caption }} ({{ status_label(s) }}) — {{ s.projectCaption or "" }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn secondary" type="submit">Trocar</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+  <a class="btn secondary" href="/setup">Reconfigurar credenciais</a>
+{% endif %}
+{% endblock %}

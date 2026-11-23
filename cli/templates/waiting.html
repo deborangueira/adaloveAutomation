@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="3;url=/capture/wait?next={{ next_href }}">{% endblock %}
+{% block body %}
+  <h1>Aguardando login…</h1>
+  <p class="sub">Uma janela do navegador foi aberta para você entrar no Adalove.
+  Faça login nela — esta página continua sozinha quando terminar.</p>
+  <a class="btn secondary" href="/">← Voltar ao início</a>
+{% endblock %}

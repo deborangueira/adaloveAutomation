@@ -19,7 +19,9 @@ import time
 from pathlib import Path
 from typing import Callable
 
-PIDFILE = Path.home() / ".adalove-server.pid"
+from adalove.config.paths import SERVER_PIDFILE
+
+PIDFILE = SERVER_PIDFILE
 
 
 class IdleWatchdog:

@@ -1,11 +1,10 @@
 import pytest
 from adalove.models.activity import Activity
-from adalove.writers.subject_links import write_subject_links_md
+from adalove.report.markdown import prova_md
 
 
 @pytest.fixture
-def tmp_output(tmp_path, monkeypatch):
-    monkeypatch.setattr("adalove.writers.subject_links.OUTPUT_DIR", tmp_path)
+def tmp_output(tmp_path):
     return tmp_path
 
 
@@ -42,8 +41,7 @@ def test_instrucoes_section_lists_only_type_2_titles(tmp_output):
         make_activity("Aula 2", "Prof A", type=2),
         make_activity("Autoestudo 1", "Prof A", type=11, grade_weight=0),
     ]
-    paths = write_subject_links_md(activities, TEACHER_SUBJECTS, "T1")
-    content = paths[0].read_text(encoding="utf-8")
+    content = next(iter(prova_md(activities, TEACHER_SUBJECTS).values()))
     instrucoes_block = content.split("## Instruções")[1].split("## Autoestudo")[0]
     assert "- Aula 1" in instrucoes_block
     assert "- Aula 2" in instrucoes_block
@@ -56,8 +54,7 @@ def test_instrucoes_grouped_by_sprint(tmp_output):
         make_activity("Aula Semana 2", "Prof A", type=2, folder_number=2),
         make_activity("Aula Semana 3", "Prof A", type=2, folder_number=3),
     ]
-    paths = write_subject_links_md(activities, TEACHER_SUBJECTS, "T1")
-    content = paths[0].read_text(encoding="utf-8")
+    content = next(iter(prova_md(activities, TEACHER_SUBJECTS).values()))
     instrucoes_block = content.split("## Instruções")[1].split("## Links")[0]
     sprint1_block = instrucoes_block.split("### Sprint 1")[1].split("### Sprint 2")[0]
     sprint2_block = instrucoes_block.split("### Sprint 2")[1]
@@ -73,8 +70,7 @@ def test_autoestudo_section_excludes_ponderadas(tmp_output):
         make_activity("Autoestudo 1", "Prof A", type=11, grade_weight=0),
         make_activity("Ponderada 1", "Prof A", type=11, grade_weight=4),
     ]
-    paths = write_subject_links_md(activities, TEACHER_SUBJECTS, "T1")
-    content = paths[0].read_text(encoding="utf-8")
+    content = next(iter(prova_md(activities, TEACHER_SUBJECTS).values()))
     autoestudo_block = content.split("## Autoestudo")[1].split("## Links")[0]
     assert "- Autoestudo 1" in autoestudo_block
     assert "Ponderada 1" not in autoestudo_block
@@ -82,8 +78,7 @@ def test_autoestudo_section_excludes_ponderadas(tmp_output):
 
 def test_sections_omitted_when_empty(tmp_output):
     activities = [make_activity("Encontro Projeto", "Prof A", type=1)]
-    paths = write_subject_links_md(activities, TEACHER_SUBJECTS, "T1")
-    content = paths[0].read_text(encoding="utf-8")
+    content = next(iter(prova_md(activities, TEACHER_SUBJECTS).values()))
     assert "## Instruções" not in content
     assert "## Autoestudo" not in content
 
@@ -93,8 +88,7 @@ def test_links_section_still_includes_every_activity_with_url(tmp_output):
         make_activity("Aula 1", "Prof A", url="https://ex.com/1", type=2),
         make_activity("Autoestudo 1", "Prof A", url="https://ex.com/2", type=11, grade_weight=0),
     ]
-    paths = write_subject_links_md(activities, TEACHER_SUBJECTS, "T1")
-    content = paths[0].read_text(encoding="utf-8")
+    content = next(iter(prova_md(activities, TEACHER_SUBJECTS).values()))
     links_block = content.split("## Links")[1]
     assert "https://ex.com/1" in links_block
     assert "https://ex.com/2" in links_block

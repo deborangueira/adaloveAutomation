@@ -7,7 +7,8 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
+
+from adalove.config.paths import BROWSER_PROFILE_DIR
 
 try:
     from playwright.sync_api import sync_playwright
@@ -18,7 +19,7 @@ except ImportError:
 _ADALOVE_URL = "https://adalove.inteli.edu.br/academic-life"
 _API_HOST = "apiv2.inteli.edu.br/sections/"
 _API_PATH = "/userdata"
-_PROFILE_DIR = Path.home() / ".adalove-browser"
+_PROFILE_DIR = BROWSER_PROFILE_DIR
 _POLL_MS = 300
 _LOGIN_WAIT_MS = 180_000
 # Hard ceiling for the isolated capture: the login window plus slack for

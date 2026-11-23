@@ -1,11 +1,10 @@
 import pytest
 from adalove.models.activity import Activity
-from adalove.writers.ponderadas import write_ponderadas_md
+from adalove.report.markdown import ponderadas_md
 
 
 @pytest.fixture
-def tmp_output(tmp_path, monkeypatch):
-    monkeypatch.setattr("adalove.writers.ponderadas.OUTPUT_DIR", tmp_path)
+def tmp_output(tmp_path):
     return tmp_path
 
 
@@ -33,13 +32,6 @@ def make_activity(
     )
 
 
-def test_writes_a_single_file(tmp_output):
-    activities = [make_activity("Ponderada 1", professor="Prof A", folder_number=3)]
-    path = write_ponderadas_md(activities, "T1", tmp_output)
-    assert path == tmp_output / "T1" / "ponderadas" / "ponderadas.md"
-    assert list((tmp_output / "T1" / "ponderadas").iterdir()) == [path]
-
-
 def test_week_section_has_one_table_row_per_ponderada_with_labeled_fields(tmp_output):
     activities = [
         make_activity(
@@ -50,7 +42,7 @@ def test_week_section_has_one_table_row_per_ponderada_with_labeled_fields(tmp_ou
             avaliacao_markdown="Critério: completude e clareza.",
         ),
     ]
-    content = write_ponderadas_md(activities, "T1", tmp_output).read_text(encoding="utf-8")
+    content = ponderadas_md(activities)
     assert "## Semana 03" in content
     assert "| Ponderadas |" in content
     row = content.split("## Semana 03")[1].split("|---|")[1]
@@ -69,7 +61,7 @@ def test_multiline_avaliacao_stays_inside_a_single_table_row(tmp_output):
             avaliacao_markdown="Linha 1\nLinha 2",
         ),
     ]
-    content = write_ponderadas_md(activities, "T1", tmp_output).read_text(encoding="utf-8")
+    content = ponderadas_md(activities)
     row = content.split("## Semana 03")[1].split("|---|")[1].strip().splitlines()[0]
     assert "Linha 1<br>Linha 2" in row
     assert "\nLinha 2" not in content
@@ -77,5 +69,5 @@ def test_multiline_avaliacao_stays_inside_a_single_table_row(tmp_output):
 
 def test_weeks_with_no_ponderadas_are_skipped(tmp_output):
     activities = [make_activity("Ponderada 1", professor="Prof A", folder_number=3)]
-    content = write_ponderadas_md(activities, "T1", tmp_output).read_text(encoding="utf-8")
+    content = ponderadas_md(activities)
     assert "## Semana 04" not in content

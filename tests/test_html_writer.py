@@ -231,6 +231,19 @@ def test_export_buttons_present_for_each_section(tmp_output):
         assert f'id="export-{section}"' in html
 
 
+def test_markdown_exports_are_embedded_for_every_tab(tmp_output):
+    activities = [
+        make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z"),
+        make_activity("Ponderada 1", professor="Prof A", type=11, grade_weight=3, folder_number=1),
+    ]
+    html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")
+    exports = _embedded_data(html)["exports"]
+    assert exports["calendario"].startswith("# Calendário")
+    assert exports["projeto"].startswith("# Projeto")
+    assert "**Título:** Ponderada 1" in exports["ponderadas"]
+    assert exports["prova"]["Programação"].startswith("# Programação")
+
+
 def test_font_is_embedded_so_the_page_works_offline(tmp_output):
     activities = [make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z")]
     html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")

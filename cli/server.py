@@ -10,79 +10,39 @@ exactly as before, this is an additive way in, not a replacement (yet).
 
 from __future__ import annotations
 
-import re
 import threading
-from pathlib import Path
+from urllib.parse import urlsplit
 
-from flask import Flask, redirect, render_template_string, request, url_for
+from flask import Flask, abort, redirect, render_template, request, url_for
 
-from adalove.api.client import AdaloveClient, token_expired
+from adalove.api.client import AdaloveClient, build_section_url, extract_section_uuid, token_expired
+from adalove.config.paths import OUTPUT_DIR
 from adalove.config.settings import load_config, save_config
 from adalove.config.subjects import SUBJECTS
-from adalove.filters.activity import get_unique_teachers, infer_teacher_subjects
+from adalove.services.teachers import resolve_teacher_mapping
+from adalove.services.turmas import activate_section, available_turmas, sort_sections, status_label
 from adalove.writers.html import write_html_dashboard
 from cli.server_runtime import IdleWatchdog, interrupt_main_process
 
-OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
+OUTPUT_ROOT = OUTPUT_DIR
 
-_SHELL = """<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Adalove</title>
-<style>
-:root { color-scheme: light dark; --accent: #4f46e5; --bg: #fff; --text: #1c1f26; --muted: #6b7280; --border: #e2e4e9; }
-@media (prefers-color-scheme: dark) { :root { --bg: #14161b; --text: #e7e9ee; --muted: #9aa1ad; --border: #2b2f38; --accent: #8b85ff; } }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-main { max-width: 560px; margin: 0 auto; padding: 3rem 1.5rem; }
-h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
-p.sub { color: var(--muted); margin: 0 0 2rem; }
-.btn {
-  display: inline-flex; align-items: center; gap: .5rem; border: none; border-radius: 8px;
-  background: var(--accent); color: #fff; padding: .75rem 1.25rem; font-size: .95rem;
-  cursor: pointer; text-decoration: none;
-}
-.btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
-.card { border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
-.error { color: #d64545; }
-label { display: block; font-size: .85rem; color: var(--muted); margin: 1rem 0 .3rem; }
-input, select { width: 100%; padding: .55rem .7rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: .9rem; }
-form { margin-top: 1rem; }
-</style>
-</head>
-<body><main>__BODY__</main></body>
-</html>
-"""
-
-
-def _page(body: str) -> str:
-    return _SHELL.replace("__BODY__", body)
-
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
 def _error_page(message: str, back_href: str = "/") -> str:
-    return _page(f"""
-      <h1>Ops</h1>
-      <p class="error">{message}</p>
-      <a class="btn secondary" href="{back_href}">← Voltar</a>
-    """)
+    return render_template("error.html", message=str(message), back_href=back_href)
 
 
-def _extract_uuid(url: str) -> str | None:
-    m = re.search(r"/sections/([a-f0-9]+)", url)
-    return m.group(1) if m else None
-
-
-def _build_section_url(section_uuid: str) -> str:
-    return f"https://apiv2.inteli.edu.br/sections/{section_uuid}/userdata"
-
-
-def _sort_sections(secs: list[dict]) -> list[dict]:
-    return sorted(
-        secs,
-        key=lambda s: (0 if s.get("status") == "open" else 1, -(int((s.get("date") or "0").replace("-", "") or 0))),
-    )
+def _switch_section(config: dict, section_uuid: str) -> dict:
+    """Point config at another turma and save it. Loading that turma's data
+    (name, new teachers) is best-effort: the switch still happens without it."""
+    client = AdaloveClient(api_url=build_section_url(section_uuid), token=config["token"])
+    try:
+        section, activities = client.fetch_section_overview()
+        activate_section(config, section_uuid, section, activities)
+    except (PermissionError, ConnectionError, ValueError):
+        activate_section(config, section_uuid)
+    save_config(config)
+    return config
 
 
 class CaptureInProgress(Exception):
@@ -98,13 +58,7 @@ def _capture_credentials() -> tuple[str, str]:
 
 
 def _waiting_page(next_href: str) -> str:
-    return _page(f"""
-      <meta http-equiv="refresh" content="3;url=/capture/wait?next={next_href}">
-      <h1>Aguardando login…</h1>
-      <p class="sub">Uma janela do navegador foi aberta para você entrar no Adalove.
-      Faça login nela — esta página continua sozinha quando terminar.</p>
-      <a class="btn secondary" href="/">← Voltar ao início</a>
-    """)
+    return render_template("waiting.html", next_href=next_href)
 
 
 def create_app(idle_timeout: float | None = None) -> Flask:
@@ -112,6 +66,21 @@ def create_app(idle_timeout: float | None = None) -> Flask:
     down (None disables it — tests and embedding)."""
     app = Flask(__name__)
     capture_lock = threading.Lock()
+
+    @app.before_request
+    def _only_from_this_machine():
+        """Two cheap guards for a server with no login of its own:
+        - Host must be loopback, so a hostile page can't reach us through
+          DNS rebinding (its domain resolving to 127.0.0.1).
+        - A POST carrying an Origin must come from this same server, so a
+          hostile page can't submit forms here (CSRF). Browsers always send
+          Origin on cross-site POSTs; non-browser clients may omit it."""
+        host = (request.host or "").rsplit(":", 1)[0]
+        if host not in _LOOPBACK_HOSTS:
+            abort(403)
+        origin = request.headers.get("Origin")
+        if request.method == "POST" and origin and urlsplit(origin).netloc != request.host:
+            abort(403)
 
     def run_capture() -> tuple[str, str]:
         """Only one browser capture at a time — extra clicks get a waiting
@@ -159,71 +128,38 @@ def create_app(idle_timeout: float | None = None) -> Flask:
             configured = False
 
         if configured:
-            current_uuid = _extract_uuid(config.get("api_url", ""))
+            current_uuid = extract_section_uuid(config.get("api_url", ""))
             sections = []
             try:
                 client = AdaloveClient(api_url=config["api_url"], token=config["token"])
                 if hasattr(client, "fetch_sections"):
-                    sections = _sort_sections(client.fetch_sections())
-            except Exception:
-                sections = []
+                    sections = sort_sections(client.fetch_sections())
+            except (KeyError, PermissionError, ConnectionError, ValueError):
+                sections = []  # the page still works; it just can't offer a switch
 
             current_caption = config.get("section_caption") or ""
             current_project = ""
             current_status = ""
-            if sections:
-                for s in sections:
-                    if s.get("uuid") == current_uuid or (not current_uuid and not current_caption):
-                        current_caption = s.get("caption", "")
-                        current_project = s.get("projectCaption", "")
-                        current_status = "Aberta" if s.get("status") == "open" else "Fechada"
-                        break
+            for s in sections:
+                if s.get("uuid") == current_uuid or (not current_uuid and not current_caption):
+                    current_caption = s.get("caption", "")
+                    current_project = s.get("projectCaption", "")
+                    current_status = status_label(s)
+                    break
 
             if not current_caption:
                 current_caption = current_uuid or "Turma ativa"
-
-            turma_options = ""
-            if sections:
-                turma_options = "".join(
-                    f'<option value="{s.get("uuid")}" {"selected" if s.get("uuid") == current_uuid else ""}>'
-                    f'{s.get("caption")} ({"Aberta" if s.get("status") == "open" else "Fechada"}) — {s.get("projectCaption", "")}'
-                    f'</option>'
-                    for s in sections
-                )
-
-            body = f"""
-              <h1>Adalove</h1>
-              <p class="sub">Credenciais configuradas.</p>
-              <div class="card">
-                <label style="margin-top:0">Turma selecionada</label>
-                <div style="font-size:1.15rem;font-weight:600;margin-bottom:0.25rem;">
-                  {current_caption} {f'<span style="font-size:0.75rem;font-weight:normal;padding:2px 8px;border-radius:12px;background:var(--accent);color:#fff;vertical-align:middle;margin-left:0.4rem;">{current_status}</span>' if current_status else ''}
-                </div>
-                {f'<p style="color:var(--muted);font-size:0.85rem;margin:0 0 1.25rem;">{current_project}</p>' if current_project else '<div style="margin-bottom:1rem;"></div>'}
-                
-                <a class="btn" href="/dashboard" style="margin-bottom:1.25rem;">Abrir Dashboard</a>
-
-                {f'''
-                <form method="post" action="/turma">
-                  <label>Escolher outra turma</label>
-                  <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.3rem;">
-                    <select name="section_uuid" style="flex:1;">
-                      {turma_options}
-                    </select>
-                    <button class="btn secondary" type="submit" style="white-space:nowrap;padding:0.55rem 1rem;">Trocar</button>
-                  </div>
-                </form>
-                ''' if turma_options else ''}
-              </div>
-              <a class="btn secondary" href="/setup">Reconfigurar credenciais</a>
-            """
-        else:
-            body = """
-              <h1>Adalove</h1>
-              <p class="sub">Ainda sem credenciais configuradas.</p>
-              <a class="btn" href="/setup">Configurar credenciais</a>
-            """
-        return _page(body)
+            return render_template(
+                "home.html",
+                configured=True,
+                current_caption=current_caption,
+                current_project=current_project,
+                current_status=current_status,
+                current_uuid=current_uuid,
+                sections=sections,
+                status_label=status_label,
+            )
+        return render_template("home.html", configured=False)
 
     @app.post("/turma")
     def switch_turma():
@@ -234,20 +170,7 @@ def create_app(idle_timeout: float | None = None) -> Flask:
             config = load_config()
         except FileNotFoundError:
             return redirect(url_for("home"))
-
-        new_api_url = _build_section_url(section_uuid)
-        config["api_url"] = new_api_url
-        client = AdaloveClient(api_url=new_api_url, token=config["token"])
-        try:
-            sec, acts = client.fetch_section_overview()
-            config["section_caption"] = sec.section_caption
-            inferred = infer_teacher_subjects(acts)
-            for t in get_unique_teachers(acts):
-                if t not in config.get("teacher_subjects", {}) and t in inferred:
-                    config.setdefault("teacher_subjects", {})[t] = inferred[t]
-        except Exception:
-            pass
-        save_config(config)
+        _switch_section(config, section_uuid)
         return redirect(url_for("dashboard_view"))
 
     @app.get("/setup")
@@ -264,17 +187,7 @@ def create_app(idle_timeout: float | None = None) -> Flask:
 
     @app.get("/setup/manual")
     def setup_manual():
-        return _page("""
-          <h1>Configuração manual</h1>
-          <p class="sub">Cole a URL da API e o token capturados no DevTools do navegador.</p>
-          <form method="post" action="/setup/manual">
-            <label>URL completa da API</label>
-            <input name="api_url" required>
-            <label>Cabeçalho Authorization</label>
-            <input name="token" type="password" required>
-            <button class="btn" style="margin-top:1.25rem" type="submit">Validar e continuar</button>
-          </form>
-        """)
+        return render_template("setup_manual.html")
 
     @app.post("/setup/manual")
     def setup_manual_submit():
@@ -290,40 +203,19 @@ def create_app(idle_timeout: float | None = None) -> Flask:
         except (PermissionError, ConnectionError, ValueError) as e:
             return _error_page(str(e), back_href="/setup/manual")
 
-        teachers = get_unique_teachers(activities)
-        if not teachers:
-            return _error_page("Nenhum professor encontrado na resposta da API.")
-
         try:
             existing_map: dict[str, str] = load_config().get("teacher_subjects", {})
         except FileNotFoundError:
             existing_map = {}
-        inferred = infer_teacher_subjects(activities)
+        teacher_subjects, unmapped = resolve_teacher_mapping(activities, existing_map)
+        if not teacher_subjects and not unmapped:
+            return _error_page("Nenhum professor encontrado na resposta da API.")
 
-        unmapped = [t for t in teachers if t not in existing_map and t not in inferred]
         if unmapped:
-            rows = "".join(
-                f'<label>{t}</label>'
-                f'<select name="subject__{t}">'
-                + "".join(f'<option value="{s}">{s}</option>' for s in SUBJECTS)
-                + "</select>"
-                for t in unmapped
+            return render_template(
+                "setup_subjects.html", unmapped=unmapped, subjects=SUBJECTS, api_url=api_url, token=token
             )
-            # api_url/token ride along as hidden fields — this is a prototype
-            # for local-only use (127.0.0.1), so a round-trip through the
-            # user's own browser isn't a meaningful new exposure.
-            return _page(f"""
-              <h1>Disciplinas</h1>
-              <p class="sub">Não deu pra inferir a disciplina de {len(unmapped)} professor(es) — escolha manualmente.</p>
-              <form method="post" action="/setup/subjects">
-                <input type="hidden" name="api_url" value="{api_url}">
-                <input type="hidden" name="token" value="{token}">
-                {rows}
-                <button class="btn" style="margin-top:1.25rem" type="submit">Salvar</button>
-              </form>
-            """)
 
-        teacher_subjects = {t: (existing_map.get(t) or inferred[t]) for t in teachers}
         save_config({"api_url": api_url, "token": token, "teacher_subjects": teacher_subjects})
         return redirect(url_for("home"))
 
@@ -337,17 +229,14 @@ def create_app(idle_timeout: float | None = None) -> Flask:
         except (PermissionError, ConnectionError, ValueError) as e:
             return _error_page(str(e), back_href="/setup/manual")
 
-        teachers = get_unique_teachers(activities)
         try:
             existing_map: dict[str, str] = load_config().get("teacher_subjects", {})
         except FileNotFoundError:
             existing_map = {}
-        inferred = infer_teacher_subjects(activities)
-
-        teacher_subjects = {}
-        for t in teachers:
+        teacher_subjects, unmapped = resolve_teacher_mapping(activities, existing_map)
+        for t in unmapped:
             chosen = request.form.get(f"subject__{t}")
-            teacher_subjects[t] = chosen or existing_map.get(t) or inferred.get(t) or SUBJECTS[-1]
+            teacher_subjects[t] = chosen if chosen in SUBJECTS else SUBJECTS[-1]
 
         save_config({"api_url": api_url, "token": token, "teacher_subjects": teacher_subjects})
         return redirect(url_for("home"))
@@ -360,21 +249,8 @@ def create_app(idle_timeout: float | None = None) -> Flask:
             return redirect(url_for("home"))
 
         req_section = request.args.get("section")
-        if req_section:
-            new_api_url = _build_section_url(req_section)
-            if new_api_url != config.get("api_url"):
-                config["api_url"] = new_api_url
-                client = AdaloveClient(api_url=new_api_url, token=config["token"])
-                try:
-                    sec, acts = client.fetch_section_overview()
-                    config["section_caption"] = sec.section_caption
-                    inferred = infer_teacher_subjects(acts)
-                    for t in get_unique_teachers(acts):
-                        if t not in config.get("teacher_subjects", {}) and t in inferred:
-                            config.setdefault("teacher_subjects", {})[t] = inferred[t]
-                except Exception:
-                    pass
-                save_config(config)
+        if req_section and build_section_url(req_section) != config.get("api_url"):
+            _switch_section(config, req_section)
 
         if token_expired(config.get("token", "")):
             try:
@@ -383,9 +259,9 @@ def create_app(idle_timeout: float | None = None) -> Flask:
                 return _waiting_page("/dashboard")
             except (ImportError, PermissionError, TimeoutError, ValueError) as e:
                 return _error_page(f"Token expirado e recaptura automática falhou: {e}", back_href="/setup/manual")
-            curr_uuid = _extract_uuid(config.get("api_url", ""))
+            curr_uuid = extract_section_uuid(config.get("api_url", ""))
             if curr_uuid:
-                config["api_url"] = _build_section_url(curr_uuid)
+                config["api_url"] = build_section_url(curr_uuid)
             else:
                 config["api_url"] = api_url
             config["token"] = token
@@ -402,26 +278,14 @@ def create_app(idle_timeout: float | None = None) -> Flask:
         except (ConnectionError, ValueError) as e:
             return _error_page(str(e))
 
-        sections = []
+        turmas = None
         try:
             if hasattr(client, "fetch_sections"):
-                sections = _sort_sections(client.fetch_sections())
-        except Exception:
-            sections = []
+                turmas = available_turmas(client.fetch_sections(), config, section.section_caption) or None
+        except (PermissionError, ConnectionError, ValueError):
+            turmas = None  # the switcher is optional; the dashboard still renders
 
-        current_uuid = _extract_uuid(config.get("api_url", ""))
-        available_turmas = [
-            {
-                "uuid": s.get("uuid"),
-                "caption": s.get("caption"),
-                "projectCaption": s.get("projectCaption"),
-                "status": s.get("status"),
-                "active": (s.get("uuid") == current_uuid) or (s.get("caption") == section.section_caption),
-            }
-            for s in sections
-        ] if sections else None
-
-        path = write_html_dashboard(activities, section, teacher_subjects, OUTPUT_ROOT, available_turmas=available_turmas)
+        path = write_html_dashboard(activities, section, teacher_subjects, OUTPUT_ROOT, available_turmas=turmas)
         return path.read_text(encoding="utf-8")
 
     return app

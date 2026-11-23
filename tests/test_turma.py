@@ -2,7 +2,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from adalove.models.section_info import SectionInfo
-from cli.main import _extract_section_uuid, _sort_sections, escolher_turma
+from adalove.api.client import extract_section_uuid as _extract_section_uuid
+from adalove.services.turmas import sort_sections as _sort_sections
+from cli.commands.turma import escolher_turma
 
 
 def test_extract_section_uuid():
@@ -46,13 +48,14 @@ def test_escolher_turma_updates_config(tmp_path, monkeypatch):
         [],
     )
 
-    monkeypatch.setattr("cli.main.AdaloveClient", lambda *args, **kwargs: mock_client)
-    monkeypatch.setattr("cli.main._ensure_fresh_token", lambda cfg: cfg)
+    monkeypatch.setattr("cli.auth.AdaloveClient", lambda *args, **kwargs: mock_client)
+    monkeypatch.setattr("cli.commands.turma.AdaloveClient", lambda *args, **kwargs: mock_client)
+    monkeypatch.setattr("cli.auth._ensure_fresh_token", lambda cfg: cfg)
 
     # Mock user selection of the new turma
     mock_select = MagicMock()
     mock_select.ask.return_value = fake_sections[0]
-    monkeypatch.setattr("cli.main.questionary.select", lambda *args, **kwargs: mock_select)
+    monkeypatch.setattr("cli.auth.questionary.select", lambda *args, **kwargs: mock_select)
 
     escolher_turma()
 

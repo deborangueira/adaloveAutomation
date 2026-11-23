@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+  <h1>Configuração manual</h1>
+  <p class="sub">Cole a URL da API e o token capturados no DevTools do navegador.</p>
+  <form method="post" action="/setup/manual">
+    <label>URL completa da API</label>
+    <input name="api_url" required>
+    <label>Cabeçalho Authorization</label>
+    <input name="token" type="password" required>
+    <button class="btn spaced" type="submit">Validar e continuar</button>
+  </form>
+{% endblock %}

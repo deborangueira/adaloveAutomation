@@ -2,10 +2,10 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from adalove.config.paths import OUTPUT_DIR
 from adalove.filters.activity import get_ponderadas
 from adalove.models.activity import Activity
 
-OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
 _UNKNOWN_TURMA = "turma-desconhecida"
 
 MODE_LINK = "link"

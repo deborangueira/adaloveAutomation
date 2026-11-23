@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block body %}
+  <h1>Disciplinas</h1>
+  <p class="sub">Não deu pra inferir a disciplina de {{ unmapped|length }} professor(es) — escolha manualmente.</p>
+  <form method="post" action="/setup/subjects">
+    {# api_url/token ride along as hidden fields — local-only server, so a
+       round-trip through the user's own browser isn't a new exposure. #}
+    <input type="hidden" name="api_url" value="{{ api_url }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    {% for teacher in unmapped %}
+    <label>{{ teacher }}</label>
+    <select name="subject__{{ teacher }}">
+      {% for s in subjects %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <button class="btn spaced" type="submit">Salvar</button>
+  </form>
+{% endblock %}

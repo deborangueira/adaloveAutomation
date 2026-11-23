@@ -1,6 +1,2 @@
-typer>=0.12
-questionary>=2.0
-requests>=2.31
-playwright>=1.40
-pytest>=8.0
-pytest-mock>=3.12
+# Mirrors pyproject.toml (the source of truth): app + browser capture + tests.
+-e .[browser,dev]

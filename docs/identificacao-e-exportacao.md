@@ -24,13 +24,13 @@ Alguns campos usados em métricas do Progresso (`Activity.status == 3` para auto
 
 ## Exportações do dashboard (botões "Exportar dados")
 
-A opção **Abrir Dashboard** do menu gera um único arquivo `dashboard.html` autocontido (sem dependências externas, funciona offline) e abre ele no navegador. Cada uma das quatro abas do dashboard — Calendário, Projeto, Prova e Ponderadas — tem seu próprio botão de exportação, discreto no rodapé da página, que baixa um arquivo `.md` com o mesmo conteúdo e formato produzido pelos writers internos do projeto (`adalove/writers/calendario.py`, `project.py`, `subject_links.py` e `ponderadas.py`). Como o `dashboard.html` não tem servidor por trás (é só um arquivo aberto localmente no navegador), esses `.md` são remontados inteiramente em JavaScript a partir dos dados já embutidos na própria página, sem chamar os writers em Python — a paridade de formato entre os dois lados é verificada manualmente a cada mudança.
+A opção **Abrir Dashboard** do menu gera um único arquivo `dashboard.html` autocontido (sem dependências externas, funciona offline) e abre ele no navegador. Cada uma das quatro abas do dashboard — Calendário, Projeto, Prova e Ponderadas — tem seu próprio botão de exportação, discreto no rodapé da página, que baixa um arquivo `.md` daquela aba. O Markdown é gerado em Python por `adalove/report/markdown.py`, a partir dos mesmos dados que desenham o dashboard (`adalove/report/model.py`), e vai embutido no próprio `dashboard.html` — como o arquivo é aberto localmente, sem servidor, o botão só entrega o texto já pronto. O formato é coberto pelos testes `tests/test_markdown_*.py`.
 
 | Aba | Arquivo baixado | Conteúdo |
 |---|---|---|
-| **Calendário** | `calendario.md` | Resumo do módulo por semana (ponderadas + composição por disciplina) e o cronograma de encontros por sprint, com a listagem de ponderadas de cada sprint — mesmo formato de `writers/calendario.py`. |
-| **Projeto** | `projeto.md` | Todos os artefatos do projeto, organizados por sprint — mesmo formato do arquivo consolidado de `writers/project.py`. |
-| **Prova** | `prova-<disciplina>.md` | Só a disciplina selecionada no momento na navegação à esquerda da aba (não todas de uma vez) — Instruções por sprint, Autoestudo, Links e Referências a livros, no mesmo formato de `writers/subject_links.py`. O nome do arquivo muda conforme a disciplina escolhida (ex: `prova-matemática.md`). |
-| **Ponderadas** | `ponderadas.md` | Todas as ponderadas por semana, com título, professor, peso e descrição — mesmo formato de `writers/ponderadas.py`. |
+| **Calendário** | `calendario.md` | Resumo do módulo por semana (ponderadas + composição por disciplina) e o cronograma de encontros por sprint, com a listagem de ponderadas de cada sprint. |
+| **Projeto** | `projeto.md` | Todos os artefatos do projeto, organizados por sprint. |
+| **Prova** | `prova-<disciplina>.md` | Só a disciplina selecionada no momento na navegação à esquerda da aba (não todas de uma vez) — Instruções por sprint, Autoestudo, Links e Referências a livros. O nome do arquivo muda conforme a disciplina escolhida (ex: `prova-matemática.md`). |
+| **Ponderadas** | `ponderadas.md` | Todas as ponderadas por semana, com título, professor, peso e descrição. |
 
 A aba **Turma** não tem botão de exportação — ela só mostra, na própria tela, os dados da turma (módulo, orientador(a), grupo, data da sessão) e o mapeamento disciplina → professor(es).

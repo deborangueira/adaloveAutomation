@@ -11,10 +11,12 @@ dependencies = [
     "questionary>=2.0",
     "requests>=2.31",
     "flask>=3.0",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
 browser = ["playwright>=1.40"]
+dev = ["pytest>=8.0", "pytest-mock>=3.12"]
 
 [project.scripts]
 adalove = "cli.main:app"
@@ -22,3 +24,8 @@ adalove = "cli.main:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["adalove*", "cli*"]
+
+# The dashboard's template, CSS, JS and embedded font ship inside the package.
+[tool.setuptools.package-data]
+"adalove.writers" = ["html_assets/*", "html_assets/fonts/*"]
+"cli" = ["templates/*"]

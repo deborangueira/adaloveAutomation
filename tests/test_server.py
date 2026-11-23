@@ -266,3 +266,27 @@ def test_idle_timeout_middleware_tracks_requests(tmp_path, monkeypatch):
     c = server.create_app(idle_timeout=60).test_client()
     c.get("/")
     assert created[0].started == 1 and created[0].finished == 1
+
+
+def test_teacher_names_from_the_api_are_escaped(client, monkeypatch):
+    activities = [make_activity(professor="<script>alert(1)</script>", axis_caption="")]
+    monkeypatch.setattr("cli.server.AdaloveClient", lambda api_url, token: _FakeClient(api_url, token, activities))
+
+    body = client.post("/setup/manual", data={"api_url": "https://example.com", "token": "Bearer x"}).get_data(as_text=True)
+    assert "<script>alert(1)</script>" not in body
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body
+
+
+def test_cross_site_post_is_rejected(client):
+    resp = client.post("/turma", data={"section_uuid": "sec2"}, headers={"Origin": "https://evil.example"})
+    assert resp.status_code == 403
+
+
+def test_same_origin_post_is_allowed(client):
+    resp = client.post("/turma", data={"section_uuid": ""}, headers={"Origin": "http://localhost"})
+    assert resp.status_code == 302
+
+
+def test_non_loopback_host_is_rejected(client):
+    """A page on evil.example whose DNS points at 127.0.0.1 still sends its own Host."""
+    assert client.get("/", headers={"Host": "evil.example"}).status_code == 403

@@ -1,5 +1,5 @@
 import math
-from cli.main import _draw_pie, _build_grid
+from cli.commands.progresso import _draw_pie, _build_grid
 from adalove.models.dashboard_metrics import DashboardMetrics
 from rich.table import Table
 

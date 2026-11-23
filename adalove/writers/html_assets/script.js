@@ -598,11 +598,10 @@ const currentWeek = MODULE.status === 'running' ? MODULE.week : null;
 
   // Prova is browsed one subject at a time, so its export downloads just
   // the subject currently on screen — not the whole tab like the other
-  // three buttons — matching the per-discipline files write_subject_links_md
-  // already produces (matematica.md, programacao.md, ...).
+  // three buttons (one Markdown per discipline, see report/markdown.py).
   document.getElementById('export-prova').addEventListener('click', () => {
     const slug = currentSubject.name.toLowerCase().replace(/ /g, '-');
-    downloadText(`prova-${slug}.md`, buildProvaSubjectMd(currentSubject));
+    downloadText(`prova-${slug}.md`, DATA.exports.prova[currentSubject.name]);
   });
 
   function renderContent() {
@@ -768,111 +767,9 @@ setupTablist(document.querySelector('.tabs'), tabs, {
   onSelect: i => showView(tabs[i].dataset.view),
 }).select(0);
 
-// ── Exportar dados (rebuilds each tab's .md, matching the writers/*.py
-// output, since this static page has no server to call them directly) ─────
-const pad2 = (n) => String(n).padStart(2, '0');
-
-function coloredMd(label) {
-  const color = subjectColor(label);
-  return color ? `_<span style="color:${color}">${label}</span>_` : `_${label}_`;
-}
-
-function blocksMd(subject, fraction) {
-  const count = Math.max(1, Math.round(fraction * 10));
-  const blocks = '█'.repeat(count);
-  const color = subjectColor(subject);
-  return color ? `<span style="color:${color}">${blocks}</span>` : blocks;
-}
-
-function buildCalendarioMd() {
-  const lines = ['# Calendário', `> Gerado em: ${DATA.generatedAt}`, '', '---', '', '## Resumo do Módulo', ''];
-
-  const headers = ['', ...DATA.resumo.map(w => `Semana ${pad2(w.week)}`)];
-  lines.push(`| ${headers.join(' | ')} |`);
-  lines.push(`|${headers.map(() => '---').join('|')}|`);
-  lines.push(`| **Ponderadas** | ${DATA.resumo.map(w => w.ponderadasSubjects.map(coloredMd).join(', ')).join(' | ')} |`);
-  lines.push(`| **Composição de aulas** | ${DATA.resumo.map(w => w.composicao.map(seg => blocksMd(seg.subject, seg.fraction)).join('')).join(' | ')} |`);
-  lines.push(`| **Artefatos** | ${DATA.resumo.map(w => w.artifactCount ? String(w.artifactCount) : '').join(' | ')} |`);
-  lines.push('');
-
-  DATA.sprints.forEach(sprint => {
-    lines.push(`## Sprint ${sprint.number}`, '');
-    sprint.encontros.forEach(item => {
-      lines.push(item.label
-        ? `- **${item.date}** — ${coloredMd(item.label)} — ${item.title}`
-        : `- **${item.date}** — ${item.title}`);
-    });
-    lines.push('');
-    if (sprint.ponderadas.length) {
-      lines.push('**Ponderadas:**', '');
-      sprint.ponderadas.forEach(p => lines.push(`- ${coloredMd(p.subject)} — ${p.weight} pontos — Semana ${pad2(p.week)}`));
-      lines.push('');
-    }
-  });
-  return lines.join('\n');
-}
-
-function buildProjetoMd() {
-  const lines = ['# Projeto', `> Gerado em: ${DATA.generatedAt}`, '', '---', ''];
-  DATA.projeto.forEach(sprint => {
-    lines.push(`## Sprint ${sprint.sprint} (Semana ${pad2(sprint.week)})`, '');
-    sprint.artifacts.forEach(a => {
-      lines.push(`### ${a.caption}`, '');
-      if (a.descriptionMarkdown) lines.push(a.descriptionMarkdown, '');
-    });
-    lines.push('---', '');
-  });
-  return lines.join('\n');
-}
-
-function buildPonderadaCell(item) {
-  const parts = [`**Título:** ${item.caption}`];
-  if (item.professor) parts.push(`**Professor:** ${item.professor}`);
-  parts.push(`**Peso:** ${item.weight} pontos`);
-  if (item.avaliacaoMarkdown) parts.push(`**Descrição:** ${item.avaliacaoMarkdown}`);
-  return parts.join('<br>').replace(/\|/g, '\\|').replace(/\n/g, '<br>');
-}
-
-function buildPonderadasMd() {
-  const lines = ['# Ponderadas', `> Gerado em: ${DATA.generatedAt}`, '', '---', ''];
-  DATA.ponderadas.forEach(week => {
-    lines.push(`## Semana ${pad2(week.week)}`, '', '| Ponderadas |', '|---|');
-    week.items.forEach(item => lines.push(`| ${buildPonderadaCell(item)} |`));
-    lines.push('');
-  });
-  return lines.join('\n');
-}
-
-function buildProvaSubjectMd(subj) {
-  const lines = [`# ${subj.name}`, '', `> Gerado em: ${DATA.generatedAt}`];
-  if (subj.professors.length) lines.push(`> Professor: ${subj.professors.join(', ')}`);
-  lines.push('');
-  if (subj.instrucoesBySprint.length) {
-    lines.push('## Instruções', '');
-    subj.instrucoesBySprint.forEach(s => {
-      lines.push(`### Sprint ${s.sprint}`, '');
-      s.titles.forEach(t => lines.push(`- ${t}`));
-      lines.push('');
-    });
-  }
-  if (subj.autoestudo.length) {
-    lines.push('## Autoestudo', '');
-    subj.autoestudo.forEach(t => lines.push(`- ${t}`));
-    lines.push('');
-  }
-  if (subj.links.length) {
-    lines.push('## Links', '');
-    subj.links.forEach(u => lines.push(u));
-    lines.push('');
-  }
-  if (subj.books.length) {
-    lines.push('## Referências a livros', '');
-    subj.books.forEach(u => lines.push(u));
-    lines.push('');
-  }
-  return lines.join('\n');
-}
-
-document.getElementById('export-calendario').addEventListener('click', () => downloadText('calendario.md', buildCalendarioMd()));
-document.getElementById('export-projeto').addEventListener('click', () => downloadText('projeto.md', buildProjetoMd()));
-document.getElementById('export-ponderadas').addEventListener('click', () => downloadText('ponderadas.md', buildPonderadasMd()));
+// ── Exportar dados ───────────────────────────────────────────────────────
+// The Markdown is rendered in Python (adalove/report/markdown.py) and
+// embedded in DATA.exports; the page only hands it to the browser.
+document.getElementById('export-calendario').addEventListener('click', () => downloadText('calendario.md', DATA.exports.calendario));
+document.getElementById('export-projeto').addEventListener('click', () => downloadText('projeto.md', DATA.exports.projeto));
+document.getElementById('export-ponderadas').addEventListener('click', () => downloadText('ponderadas.md', DATA.exports.ponderadas));
