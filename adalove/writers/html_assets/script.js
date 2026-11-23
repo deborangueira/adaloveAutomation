@@ -84,6 +84,208 @@ function makeExpandable(body) {
   });
 }
 
+// ── Componentes ──────────────────────────────────────────────────────────
+// Small DOM factories shared by every tab, so each render function only
+// describes *what* to show. Styling lives in style.css under the same names.
+
+const ICON_EXTERNAL = '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>';
+
+function svgIcon(paths, cls, size = 13) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', cls);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = paths;
+  return svg;
+}
+
+// EmptyState — one look for "nothing here" across tabs. `compact` is the
+// smaller italic variant used inside cards.
+const ICON_EMPTY = '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>';
+
+function emptyState(text, { compact = false } = {}) {
+  if (compact) return el('p', 'empty-state compact', text);
+  const box = el('div', 'empty-state');
+  box.appendChild(svgIcon(ICON_EMPTY, 'empty-state-icon', 32));
+  box.appendChild(el('p', null, text));
+  return box;
+}
+
+// Adalove sends some captions in ALL CAPS; shown as a sentence they read
+// calmer. Mixed-case captions are left exactly as written.
+function sentenceCase(text) {
+  if (!text || text !== text.toUpperCase() || !/[A-ZÀ-Ý]/.test(text)) return text;
+  const lower = text.toLocaleLowerCase('pt-BR');
+  return lower.charAt(0).toLocaleUpperCase('pt-BR') + lower.slice(1);
+}
+
+// "Hermano Peixoto de Oliveira Junior" → "HJ" (first + last name).
+function initials(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  const first = parts[0][0];
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (first + last).toUpperCase();
+}
+
+// LinkItem — a row that opens in a new tab, with an icon saying so. Without
+// a url it renders as plain text in the same box, keeping lists aligned.
+function linkItem({ title, url, tooltip }) {
+  const item = el(url ? 'a' : 'div', 'link-item');
+  item.title = tooltip || title;
+  item.appendChild(el('span', 'link-item-title', title));
+  if (url) {
+    item.href = url;
+    item.target = '_blank';
+    item.rel = 'noopener';
+    item.appendChild(svgIcon(ICON_EXTERNAL, 'link-item-icon'));
+    item.appendChild(el('span', 'sr-only', '(abre em nova aba)'));
+  }
+  return item;
+}
+
+function linkList(links) {
+  const list = el('div', 'link-list');
+  links.forEach(l => list.appendChild(linkItem(l)));
+  return list;
+}
+
+// Raw URLs are hard to scan; show host + path and keep the full URL in the
+// tooltip.
+function prettyUrl(url) {
+  try {
+    const u = new URL(url);
+    let path = decodeURIComponent(u.pathname).replace(/\/$/, '');
+    // A short path (youtube.com/watch) means the query is what identifies it.
+    if (path.length < 12 && u.search) path += u.search;
+    const shortPath = path.length > 48 ? path.slice(0, 47) + '…' : path;
+    return u.hostname.replace(/^www\./, '') + shortPath;
+  } catch (e) {
+    return url;
+  }
+}
+
+function copyButton(label, getText) {
+  const btn = el('button', 'copy-btn', label);
+  btn.type = 'button';
+  btn.setAttribute('aria-live', 'polite');
+  btn.addEventListener('click', () => copyText(getText(), btn));
+  return btn;
+}
+
+// ContentCard — title + copy button, optional meta line and a rich-text body
+// that collapses when long. Appends to `root` itself because makeExpandable
+// needs the card in the DOM to measure it.
+// `subject` tints the card with that disciplina's color; `weight` shows the
+// ponderada's points prominently. Copying keeps the caption as written.
+function appendContentCard(root, { title, meta, html, subject, weight }) {
+  const card = el('article', 'content-card');
+  const color = subject ? subjectColor(subject) : null;
+  if (color) {
+    card.classList.add('has-subject');
+    card.style.setProperty('--subject', color);
+  }
+  const head = el('div', 'content-card-head');
+  head.appendChild(el('h3', null, sentenceCase(title)));
+  const actions = el('div', 'content-card-actions');
+  if (weight !== undefined && weight !== null) {
+    const pill = el('span', 'weight-pill');
+    pill.appendChild(el('strong', null, String(weight)));
+    pill.appendChild(document.createTextNode(weight === 1 ? 'ponto' : 'pontos'));
+    actions.appendChild(pill);
+  }
+  actions.appendChild(copyButton('Copiar', () => (html ? `${title}\n\n${plainText(html)}` : title)));
+  head.appendChild(actions);
+  card.appendChild(head);
+  if (meta) card.appendChild(el('p', 'meta', meta));
+  const body = el('div', 'content-card-body');
+  richHtml(body, html);
+  card.appendChild(body);
+  root.appendChild(card);
+  makeExpandable(body);
+  return card;
+}
+
+// Tablist — wires buttons as an ARIA tablist: only the selected tab is in
+// the Tab order, arrow keys / Home / End move between tabs. `initial` is
+// marked without calling onSelect, so callers can defer their first render.
+function setupTablist(container, buttons, { label, orientation = 'horizontal', initial = 0, onSelect }) {
+  container.setAttribute('role', 'tablist');
+  container.setAttribute('aria-orientation', orientation);
+  if (label) container.setAttribute('aria-label', label);
+
+  const prevKeys = orientation === 'vertical' ? ['ArrowUp', 'ArrowLeft'] : ['ArrowLeft'];
+  const nextKeys = orientation === 'vertical' ? ['ArrowDown', 'ArrowRight'] : ['ArrowRight'];
+
+  const mark = (index) => buttons.forEach((b, i) => {
+    const on = i === index;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+  });
+  const select = (index) => { mark(index); onSelect(index); };
+
+  buttons.forEach((b, i) => {
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => select(i));
+    b.addEventListener('keydown', (e) => {
+      const n = buttons.length;
+      let target = null;
+      if (prevKeys.includes(e.key)) target = (i - 1 + n) % n;
+      else if (nextKeys.includes(e.key)) target = (i + 1) % n;
+      else if (e.key === 'Home') target = 0;
+      else if (e.key === 'End') target = n - 1;
+      if (target === null) return;
+      e.preventDefault();
+      select(target);
+      buttons[target].focus();
+    });
+  });
+
+  mark(initial);
+  return { select };
+}
+
+// NavList — the vertical menu beside each split view (Sprints, disciplinas,
+// semanas), built from data on top of Tablist.
+// The visible label sits outside the tablist element, since a tablist may
+// only contain tabs.
+function navList(root, items, { label, getLabel, getColor, onSelect }) {
+  root.appendChild(el('p', 'nav-label', label));
+  const list = el('div', 'nav-items');
+  root.appendChild(list);
+  const buttons = items.map(item => {
+    const b = el('button', null, getLabel(item));
+    const color = getColor ? getColor(item) : null;
+    if (color) {
+      b.classList.add('has-dot');
+      b.style.setProperty('--subject', color);
+    }
+    list.appendChild(b);
+    return b;
+  });
+  return setupTablist(list, buttons, { label, orientation: 'vertical', onSelect: i => onSelect(items[i]) });
+}
+
+// Some tabs can only render once visible (makeExpandable measures layout),
+// so they register here and the top-level tab switcher calls them once.
+const firstShowHooks = {};
+function onFirstShow(view, fn) { firstShowHooks[view] = fn; }
+function runFirstShow(view) {
+  const fn = firstShowHooks[view];
+  if (!fn) return;
+  delete firstShowHooks[view];
+  fn();
+}
+
 document.getElementById('turma-name').textContent = DATA.turma;
 document.getElementById('generated-at').textContent = DATA.generatedAt;
 
@@ -135,6 +337,67 @@ const SUBJECT_ABBR = {
 };
 const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
+const _now = new Date();
+const _pad = (n) => String(n).padStart(2, '0');
+const TODAY_STR = `${_pad(_now.getDate())}/${_pad(_now.getMonth() + 1)}/${_now.getFullYear()}`;
+// "dd/mm/yyyy" → "yyyymmdd", so dates compare as plain strings.
+const dateKey = (s) => (s || '').split('/').reverse().join('');
+const TODAY_KEY = dateKey(TODAY_STR);
+
+// Human dates: "02/02/2026" → "seg · 02 fev". The year repeats on every row
+// and carries no information inside a module, so it's dropped from display
+// (the full date stays in the tooltip).
+const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function parseBrDate(s) {
+  const [d, m, y] = (s || '').split('/').map(Number);
+  return d && m && y ? new Date(y, m - 1, d) : null;
+}
+function shortDate(s) {
+  const d = parseBrDate(s);
+  return d ? `${_pad(d.getDate())} ${MONTHS[d.getMonth()]}` : (s || '');
+}
+function friendlyDate(s) {
+  const d = parseBrDate(s);
+  return d ? `${WEEKDAYS[d.getDay()]} · ${shortDate(s)}` : (s || '');
+}
+
+// Where today falls in the module, derived from the encontro dates:
+// 'before' it starts, 'running' (with the current week), 'done', or
+// 'unknown' when there's no calendar at all.
+const ALL_ENCONTROS = DATA.sprints
+  .flatMap(s => s.encontros)
+  .filter(e => parseBrDate(e.date))
+  .sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
+const TOTAL_WEEKS = DATA.resumo.reduce((max, w) => Math.max(max, w.week), 0);
+const MODULE = (() => {
+  if (!ALL_ENCONTROS.length) return { status: 'unknown', next: null };
+  const next = ALL_ENCONTROS.find(e => dateKey(e.date) > TODAY_KEY) || null;
+  if (TODAY_KEY < dateKey(ALL_ENCONTROS[0].date)) return { status: 'before', next };
+  if (!next && TODAY_KEY > dateKey(ALL_ENCONTROS[ALL_ENCONTROS.length - 1].date)) return { status: 'done', next };
+  const past = ALL_ENCONTROS.filter(e => dateKey(e.date) <= TODAY_KEY);
+  return { status: 'running', week: past[past.length - 1].week, next };
+})();
+const currentWeek = MODULE.status === 'running' ? MODULE.week : null;
+
+(function renderModuleProgress() {
+  const chip = document.getElementById('module-progress');
+  const header = document.querySelector('header');
+  let pct = 0;
+  let text = '';
+  if (MODULE.status === 'running' && TOTAL_WEEKS) {
+    pct = Math.min(100, (MODULE.week / TOTAL_WEEKS) * 100);
+    text = `Semana ${MODULE.week} de ${TOTAL_WEEKS}`;
+  } else if (MODULE.status === 'done') {
+    pct = 100;
+    text = 'Módulo concluído';
+  } else if (MODULE.status === 'before' && MODULE.next) {
+    text = `Começa ${friendlyDate(MODULE.next.date)}`;
+  }
+  if (chip) chip.textContent = text;
+  header.style.setProperty('--progress', `${pct}%`);
+})();
+
 (function renderResumo() {
   const root = document.getElementById('resumo-table');
 
@@ -144,6 +407,10 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
   DATA.resumo.forEach(w => {
     const row = el('div', 'week-row');
+    if (currentWeek !== null && w.week === currentWeek) {
+      row.classList.add('current-week');
+      row.title = 'Semana atual';
+    }
     row.appendChild(el('span', 'week-pill', String(w.week)));
 
     const compCell = el('div');
@@ -168,20 +435,113 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
   });
 })();
 
+// ── Card de Hoje (Calendário) ──────────────────────────────────────────
+(function renderHojeCard() {
+  const card = document.getElementById('hoje-card');
+  if (!card) return;
+
+  // Today's encontro if there is one; otherwise the next one, so the card
+  // always says something useful instead of "nothing today".
+  const today = ALL_ENCONTROS.find(e => e.date === TODAY_STR);
+  const encontro = today || MODULE.next;
+
+  const head = el('div', 'hoje-card-head');
+
+  if (!encontro) {
+    head.appendChild(el('span', 'hoje-card-title', 'Hoje'));
+    head.appendChild(el('span', 'hoje-date-muted', friendlyDate(TODAY_STR)));
+    card.appendChild(head);
+    card.appendChild(el('hr', 'hoje-divider'));
+    if (MODULE.status === 'done') {
+      const done = el('div', 'hoje-done');
+      done.appendChild(el('span', null, '🎓'));
+      const text = el('div', null, 'Módulo concluído');
+      text.appendChild(el('small', null, 'Não há mais encontros no calendário.'));
+      done.appendChild(text);
+      card.appendChild(done);
+    } else {
+      card.appendChild(emptyState('Nenhum encontro no calendário.', { compact: true }));
+    }
+    return;
+  }
+
+  if (!today) card.classList.add('is-next');
+  head.appendChild(el('span', 'hoje-card-title', today ? 'Hoje' : 'Próximo encontro'));
+  head.appendChild(el('span', 'hoje-date-muted', friendlyDate(encontro.date)));
+  card.appendChild(head);
+
+  if (encontro.label || encontro.title) {
+    const row = el('div', 'hoje-encontro-row');
+    if (encontro.label) row.appendChild(badge(encontro.label, encontro.subject));
+    if (encontro.title) {
+      const subtitle = el('span', 'hoje-encontro-title', encontro.title);
+      subtitle.title = encontro.title;
+      row.appendChild(subtitle);
+    }
+    card.appendChild(row);
+  }
+
+  card.appendChild(el('hr', 'hoje-divider'));
+
+  const autoestudos = encontro.autoestudos || [];
+  const books = encontro.books || [];
+
+  if (autoestudos.length === 0 && books.length === 0) {
+    card.appendChild(emptyState('Nenhum autoestudo registrado.', { compact: true }));
+    return;
+  }
+
+  if (autoestudos.length > 0) {
+    card.appendChild(linkList(autoestudos));
+  }
+
+  if (books.length > 0) {
+    const bookCount = books.length;
+    const countLabel = bookCount === 1 ? "1 referência em livro" : (bookCount + " referências em livros");
+
+    const details = el("details", "hoje-books-details");
+    const summary = el("summary", "hoje-books-summary");
+    summary.textContent = "\uD83D\uDCD6 " + countLabel;
+    details.appendChild(summary);
+    details.appendChild(linkList(books));
+    card.appendChild(details);
+  }
+})();
+
 // ── Sprints (Calendário) ────────────────────────────────────────────────
 (function renderSprints() {
   const root = document.getElementById('sprints');
   DATA.sprints.forEach(sprint => {
-    const section = el('div', 'section');
-    section.appendChild(el('h3', null, `Sprint ${sprint.number}`));
+    const section = el('div', 'panel sprint-card');
+    const enc = sprint.encontros;
+    const head = el('div', 'sprint-card-head');
+    head.appendChild(el('h3', null, `Sprint ${sprint.number}`));
+    if (enc.length) {
+      const first = enc[0].date, last = enc[enc.length - 1].date;
+      head.appendChild(el('span', 'meta', first === last ? shortDate(first) : `${shortDate(first)} – ${shortDate(last)}`));
+      if (dateKey(last) < TODAY_KEY) section.classList.add('done');
+    }
+    section.appendChild(head);
 
     const list = el('ul', 'encontros');
     let prevWeek = null;
-    sprint.encontros.forEach(item => {
-      if (prevWeek !== null && item.week !== prevWeek) list.appendChild(el('li', 'divider'));
+    enc.forEach(item => {
+      if (item.week && item.week !== prevWeek) {
+        list.appendChild(el('li', 'week-label', `Semana ${item.week}`));
+      }
       prevWeek = item.week;
       const li = el('li');
-      li.appendChild(el('span', 'date', item.date));
+      const color = subjectColor(item.subject);
+      if (color) li.style.setProperty('--subject', color);
+      const isToday = (item.date === TODAY_STR);
+      if (isToday) {
+        li.classList.add('today');
+      } else if (item.date && dateKey(item.date) < TODAY_KEY) {
+        li.classList.add('past');
+      }
+      const dateSpan = el('span', 'date', friendlyDate(item.date));
+      dateSpan.title = item.date;
+      li.appendChild(dateSpan);
       if (item.label) li.appendChild(badge(item.label, item.subject));
       const titleSpan = el('span', 'title', item.title);
       titleSpan.title = item.title;
@@ -199,54 +559,26 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
   const contentRoot = document.getElementById('projeto-content');
   if (!DATA.projeto.length) {
     document.querySelector('#view-projeto .split-divider').style.display = 'none';
-    contentRoot.appendChild(el('div', 'empty-state', 'Nenhum artefato de projeto encontrado.'));
+    contentRoot.appendChild(emptyState('Nenhum artefato de projeto encontrado.'));
     return;
   }
 
   function renderContent(sprint) {
     contentRoot.innerHTML = '';
-    sprint.artifacts.forEach(a => {
-      const item = el('article', 'list-item');
-      const head = el('div', 'list-item-head');
-      head.appendChild(el('h3', null, a.caption));
-      const copyBtn = el('button', 'copy-btn', 'Copiar');
-      copyBtn.type = 'button';
-      copyBtn.addEventListener('click', () => {
-        const text = a.html ? `${a.caption}\n\n${plainText(a.html)}` : a.caption;
-        copyText(text, copyBtn);
-      });
-      head.appendChild(copyBtn);
-      item.appendChild(head);
-
-      const body = el('div', 'list-item-body');
-      richHtml(body, a.html);
-      item.appendChild(body);
-      contentRoot.appendChild(item);
-      makeExpandable(body);
-    });
+    sprint.artifacts.forEach(a => appendContentCard(contentRoot, { title: a.caption, html: a.html }));
   }
 
-  DATA.projeto.forEach((sprint, i) => {
-    const btn = el('button', i === 0 ? 'active' : null, `Sprint ${sprint.sprint}`);
-    btn.type = 'button';
-    btn.addEventListener('click', () => {
-      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-      renderContent(sprint);
-    });
-    navRoot.appendChild(btn);
+  navList(navRoot, DATA.projeto, {
+    label: 'Sprints do projeto',
+    getLabel: s => `Sprint ${s.sprint}`,
+    onSelect: renderContent,
   });
 
   // The Projeto tab starts hidden (display:none), where scrollHeight reads
   // as 0 — makeExpandable's overflow check would always come up empty. Defer
   // the first render until the tab is actually visible, so the measurement
   // reflects real layout.
-  let initialized = false;
-  document.querySelector('.tab[data-view="projeto"]').addEventListener('click', () => {
-    if (!initialized) {
-      initialized = true;
-      renderContent(DATA.projeto[0]);
-    }
-  });
+  onFirstShow('projeto', () => renderContent(DATA.projeto[0]));
 })();
 
 // ── Prova ────────────────────────────────────────────────────────────────
@@ -256,7 +588,7 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
   if (!DATA.prova.length) {
     document.querySelector('#view-prova .split-divider').style.display = 'none';
     document.querySelector('#view-prova .kind-filter').style.display = 'none';
-    contentRoot.appendChild(el('div', 'empty-state', 'Nenhuma disciplina mapeada encontrada.'));
+    contentRoot.appendChild(emptyState('Nenhuma disciplina mapeada encontrada.'));
     document.getElementById('export-prova').style.display = 'none';
     return;
   }
@@ -279,7 +611,7 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
     if (currentKind === 'instrucoes') {
       if (!subj.instrucoesBySprint.length) {
-        contentRoot.appendChild(el('p', 'empty-state', 'Nenhuma instrução registrada.'));
+        contentRoot.appendChild(emptyState('Nenhuma instrução registrada.'));
       } else {
         subj.instrucoesBySprint.forEach(s => {
           contentRoot.appendChild(el('p', 'meta', `Sprint ${s.sprint}`));
@@ -290,7 +622,7 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
       }
     } else if (currentKind === 'autoestudo') {
       if (!subj.autoestudo.length) {
-        contentRoot.appendChild(el('p', 'empty-state', 'Nenhum autoestudo registrado.'));
+        contentRoot.appendChild(emptyState('Nenhum autoestudo registrado.'));
       } else {
         const ul = el('ul', 'plain');
         subj.autoestudo.forEach(t => ul.appendChild(el('li', null, t)));
@@ -300,43 +632,41 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
       if (subj.links.length) {
         const head = el('div', 'card-head');
         head.appendChild(el('h4', null, 'Links'));
-        const copyAllBtn = el('button', 'copy-btn', 'Copiar todos');
-        copyAllBtn.type = 'button';
-        copyAllBtn.addEventListener('click', () => copyText(subj.links.join('\n'), copyAllBtn));
-        head.appendChild(copyAllBtn);
+        head.appendChild(copyButton('Copiar todos', () => subj.links.join('\n')));
         contentRoot.appendChild(head);
-        const div = el('div', 'links');
-        subj.links.forEach(u => { const a = el('a', null, u); a.href = u; a.target = '_blank'; a.rel = 'noopener'; div.appendChild(a); });
-        contentRoot.appendChild(div);
+        contentRoot.appendChild(linkList(subj.links.map(u => ({ title: prettyUrl(u), url: u, tooltip: u }))));
       } else {
-        contentRoot.appendChild(el('p', 'empty-state', 'Nenhum link registrado.'));
+        contentRoot.appendChild(emptyState('Nenhum link registrado.'));
       }
       if (subj.books.length) {
-        contentRoot.appendChild(el('h4', null, 'Referências a livros'));
-        const div = el('div', 'links');
-        subj.books.forEach(u => { const a = el('a', null, u); a.href = u; a.target = '_blank'; a.rel = 'noopener'; div.appendChild(a); });
-        contentRoot.appendChild(div);
+        contentRoot.appendChild(el('h4', 'list-heading', 'Referências a livros'));
+        contentRoot.appendChild(linkList(subj.books.map(u => ({ title: prettyUrl(u), url: u, tooltip: u }))));
       }
     }
   }
 
-  DATA.prova.forEach((subj, i) => {
-    const btn = el('button', i === 0 ? 'active' : null, subj.name);
-    btn.type = 'button';
-    btn.addEventListener('click', () => {
-      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-      currentSubject = subj;
-      renderContent();
-    });
-    navRoot.appendChild(btn);
-  });
+  // The content panel takes the selected disciplina's color.
+  const panel = contentRoot.closest('.panel');
+  function tintPanel() {
+    const color = subjectColor(currentSubject.name);
+    panel.classList.toggle('subject-accent', !!color);
+    if (color) panel.style.setProperty('--subject', color);
+  }
 
-  const kindButtons = document.querySelectorAll('#prova-kind-filter button');
-  kindButtons.forEach(btn => btn.addEventListener('click', () => {
-    kindButtons.forEach(b => b.classList.toggle('active', b === btn));
-    currentKind = btn.dataset.kind;
-    renderContent();
-  }));
+  navList(navRoot, DATA.prova, {
+    label: 'Disciplinas',
+    getLabel: s => s.name,
+    getColor: s => subjectColor(s.name),
+    onSelect: subj => { currentSubject = subj; tintPanel(); renderContent(); },
+  });
+  tintPanel();
+
+  const kindFilter = document.getElementById('prova-kind-filter');
+  const kindButtons = [...kindFilter.querySelectorAll('button')];
+  setupTablist(kindFilter, kindButtons, {
+    label: 'Tipo de conteúdo',
+    onSelect: i => { currentKind = kindButtons[i].dataset.kind; renderContent(); },
+  });
 
   renderContent();
 })();
@@ -347,57 +677,29 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
   const contentRoot = document.getElementById('ponderadas-content');
   if (!DATA.ponderadas.length) {
     document.querySelector('#view-ponderadas .split-divider').style.display = 'none';
-    contentRoot.appendChild(el('div', 'empty-state', 'Nenhuma ponderada encontrada.'));
+    contentRoot.appendChild(emptyState('Nenhuma ponderada encontrada.'));
     return;
   }
 
   function renderContent(week) {
     contentRoot.innerHTML = '';
     week.items.forEach(item => {
-      const ponderadaItem = el('article', 'list-item');
-      const head = el('div', 'list-item-head');
-      head.appendChild(el('h3', null, item.caption));
-      const copyBtn = el('button', 'copy-btn', 'Copiar');
-      copyBtn.type = 'button';
-      copyBtn.addEventListener('click', () => {
-        const text = item.html ? `${item.caption}\n\n${plainText(item.html)}` : item.caption;
-        copyText(text, copyBtn);
+      const meta = [item.subject, item.professor].filter(Boolean).join(' · ');
+      appendContentCard(contentRoot, {
+        title: item.caption, meta, html: item.html, subject: item.subject, weight: item.weight,
       });
-      head.appendChild(copyBtn);
-      ponderadaItem.appendChild(head);
-
-      const metaParts = [];
-      if (item.professor) metaParts.push(item.professor);
-      metaParts.push(`${item.weight} pontos`);
-      ponderadaItem.appendChild(el('p', 'meta', metaParts.join(' — ')));
-
-      const body = el('div', 'list-item-body');
-      richHtml(body, item.html);
-      ponderadaItem.appendChild(body);
-      contentRoot.appendChild(ponderadaItem);
-      makeExpandable(body);
     });
   }
 
-  DATA.ponderadas.forEach((week, i) => {
-    const btn = el('button', i === 0 ? 'active' : null, `Semana ${String(week.week).padStart(2, '0')}`);
-    btn.type = 'button';
-    btn.addEventListener('click', () => {
-      navRoot.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-      renderContent(week);
-    });
-    navRoot.appendChild(btn);
+  navList(navRoot, DATA.ponderadas, {
+    label: 'Semanas',
+    getLabel: w => `Semana ${String(w.week).padStart(2, '0')}`,
+    onSelect: renderContent,
   });
 
   // Same reasoning as Projeto: defer the first render until the tab is
   // actually visible, since makeExpandable's overflow check needs real layout.
-  let initialized = false;
-  document.querySelector('.tab[data-view="ponderadas"]').addEventListener('click', () => {
-    if (!initialized) {
-      initialized = true;
-      renderContent(DATA.ponderadas[0]);
-    }
-  });
+  onFirstShow('ponderadas', () => renderContent(DATA.ponderadas[0]));
 })();
 
 // ── Turma ────────────────────────────────────────────────────────────────
@@ -411,7 +713,9 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
     ['Descrição', info.moduloDescricao],
     ['Orientador(a)', info.orientador],
     ['Grupo', info.grupo],
-    ['Data da sessão', info.dataSessao],
+    ['Data da sessão', /^\d{4}-\d{2}-\d{2}$/.test(info.dataSessao || '')
+      ? friendlyDate(info.dataSessao.split('-').reverse().join('/')) + ` de ${info.dataSessao.slice(0, 4)}`
+      : info.dataSessao],
   ].forEach(([label, value]) => {
     if (!value) return;
     dl.appendChild(el('dt', null, label));
@@ -420,28 +724,49 @@ const subjectAbbr = (name) => SUBJECT_ABBR[name] || name;
 
   const list = document.getElementById('turma-disciplinas');
   if (!info.disciplinas.length) {
-    list.appendChild(el('li', 'empty-state', 'Nenhuma disciplina mapeada encontrada.'));
+    list.replaceWith(emptyState('Nenhuma disciplina mapeada encontrada.'));
   } else {
     info.disciplinas.forEach(d => {
       const li = el('li');
       li.appendChild(badge(d.subject, d.subject));
-      li.appendChild(document.createTextNode(` ${d.professors.join(', ')}`));
+      const people = el('div', 'people');
+      const color = subjectColor(d.subject);
+      if (color) people.style.setProperty('--subject', color);
+      d.professors.forEach(name => {
+        const person = el('span', 'person');
+        const avatar = el('span', 'avatar', initials(name));
+        avatar.setAttribute('aria-hidden', 'true');
+        person.appendChild(avatar);
+        person.appendChild(el('span', null, name));
+        people.appendChild(person);
+      });
+      li.appendChild(people);
       list.appendChild(li);
     });
   }
 })();
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
-const tabs = document.querySelectorAll('.tab');
+const tabs = [...document.querySelectorAll('.tab')];
 const views = document.querySelectorAll('.view');
 const exportLinks = document.querySelectorAll('.export-link');
-function activateTab(name) {
-  tabs.forEach(t => t.classList.toggle('active', t.dataset.view === name));
+tabs.forEach(t => {
+  t.id = `tab-${t.dataset.view}`;
+  t.setAttribute('aria-controls', `view-${t.dataset.view}`);
+});
+views.forEach(v => {
+  v.setAttribute('role', 'tabpanel');
+  v.setAttribute('aria-labelledby', `tab-${v.id.replace(/^view-/, '')}`);
+});
+function showView(name) {
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
   exportLinks.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  runFirstShow(name);
 }
-tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.view)));
-activateTab('calendario');
+setupTablist(document.querySelector('.tabs'), tabs, {
+  label: 'Seções do dashboard',
+  onSelect: i => showView(tabs[i].dataset.view),
+}).select(0);
 
 // ── Exportar dados (rebuilds each tab's .md, matching the writers/*.py
 // output, since this static page has no server to call them directly) ─────

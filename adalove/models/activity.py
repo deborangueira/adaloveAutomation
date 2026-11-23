@@ -94,6 +94,7 @@ class Activity:
     description_markdown: str = ""
     avaliacao_markdown: str = ""
     date: str = ""
+    sort: int = 0
 
     @classmethod
     def from_api(cls, data: dict) -> "Activity":
@@ -117,4 +118,5 @@ class Activity:
             description_markdown=html_to_markdown(data.get("description")),
             avaliacao_markdown=html_to_markdown(data.get("studyQuestion")),
             date=data.get("date") or "",
+            sort=data.get("sort") or 0,
         )

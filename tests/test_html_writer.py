@@ -231,6 +231,13 @@ def test_export_buttons_present_for_each_section(tmp_output):
         assert f'id="export-{section}"' in html
 
 
+def test_font_is_embedded_so_the_page_works_offline(tmp_output):
+    activities = [make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z")]
+    html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")
+    assert "__FONT_URL__" not in html
+    assert "url(data:font/woff2;base64," in html
+
+
 def test_write_html_dashboard_includes_available_turmas(tmp_output):
     activities = [make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z")]
     turmas = [{"uuid": "sec1", "caption": "2026-2B-T17", "status": "open"}]
@@ -241,3 +248,24 @@ def test_write_html_dashboard_includes_available_turmas(tmp_output):
     assert data["availableTurmas"] == turmas
     assert 'id="turma-header-container"' in html
 
+
+
+def test_calendar_sidebar_and_hoje_card_present_in_template(tmp_output):
+    activities = [make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z")]
+    html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")
+    assert "calendar-sidebar" in html
+    assert "id=\"hoje-card\"" in html
+
+
+def test_encontros_carry_autoestudos_and_books(tmp_output):
+    activities = [
+        make_activity("Aula 1", professor="Prof A", type=2, folder_number=1, date="2026-05-04T11:00:00Z"),
+        make_activity("Autoestudo Aberto", professor="Prof A", type=11, folder_number=1, url="https://example.com/artigo"),
+        make_activity("Autoestudo Livro", professor="Prof A", type=11, folder_number=1, url="https://integrada.minhabiblioteca.com.br/livro1"),
+    ]
+    html = write_html_dashboard(activities, make_section("T1"), TEACHER_SUBJECTS, tmp_output).read_text(encoding="utf-8")
+    data = _embedded_data(html)
+    encontro = data["sprints"][0]["encontros"][0]
+    assert encontro["title"] == "Aula 1"
+    assert encontro["autoestudos"] == [{"title": "Autoestudo Aberto", "url": "https://example.com/artigo"}]
+    assert encontro["books"] == [{"title": "Autoestudo Livro", "url": "https://integrada.minhabiblioteca.com.br/livro1"}]

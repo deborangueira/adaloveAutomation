@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 from collections import defaultdict
@@ -20,6 +21,9 @@ from adalove.models.section_info import SectionInfo
 
 OUTPUT_DIR = Path(__file__).parent.parent.parent / "output"
 _ASSETS_DIR = Path(__file__).parent / "html_assets"
+# Plus Jakarta Sans (SIL OFL 1.1, see html_assets/fonts/OFL.txt), latin
+# subset, one variable file covering every weight.
+_FONT_FILE = _ASSETS_DIR / "fonts" / "plus-jakarta-sans-latin-wght.woff2"
 _UNKNOWN_TURMA = "turma-desconhecida"
 _INSTRUCAO_LABEL = "Instrução"
 
@@ -140,8 +144,33 @@ def _build_resumo(
 
 
 def _build_sprints(
-    encontros: list[Activity], ponderadas: list[Activity], subjects_by_teacher: dict[str, str]
+    encontros: list[Activity],
+    ponderadas: list[Activity],
+    subjects_by_teacher: dict[str, str],
+    activities: list[Activity] | None = None,
 ) -> list[dict]:
+    autoestudos_by_encontro: dict[int, dict[str, list[dict]]] = defaultdict(
+        lambda: {"autoestudos": [], "books": []}
+    )
+    if activities:
+        by_week: dict[int, list[Activity]] = defaultdict(list)
+        for a in activities:
+            by_week[a.folder_number].append(a)
+
+        for w_acts in by_week.values():
+            sorted_acts = sorted(w_acts, key=lambda a: getattr(a, "sort", 0) or 0)
+            curr_encontro: Activity | None = None
+            for a in sorted_acts:
+                if a.type in ENCONTRO_LABELS:
+                    curr_encontro = a
+                elif a.type == 11 and a.grade_weight <= 0 and curr_encontro is not None:
+                    is_book = _is_book_ref(a.url)
+                    item = {"title": a.caption.strip(), "url": a.url.strip()}
+                    if is_book:
+                        autoestudos_by_encontro[id(curr_encontro)]["books"].append(item)
+                    else:
+                        autoestudos_by_encontro[id(curr_encontro)]["autoestudos"].append(item)
+
     encontros_by_sprint: dict[int, list[Activity]] = defaultdict(list)
     for a in encontros:
         encontros_by_sprint[sprint_number(a.folder_number)].append(a)
@@ -154,6 +183,7 @@ def _build_sprints(
     for sprint in sorted(set(encontros_by_sprint) | set(ponderadas_by_sprint)):
         items = []
         for a in encontros_by_sprint.get(sprint, []):
+            ae_data = autoestudos_by_encontro[id(a)]
             tipo = ENCONTRO_LABELS.get(a.type, "")
             if tipo == _INSTRUCAO_LABEL:
                 subject = subjects_by_teacher.get(a.professor_name, "")
@@ -163,6 +193,8 @@ def _build_sprints(
                     "subject": subject or None,
                     "label": subject or tipo,
                     "title": a.caption.strip(),
+                    "autoestudos": ae_data["autoestudos"],
+                    "books": ae_data["books"],
                 })
             else:
                 items.append({
@@ -171,6 +203,8 @@ def _build_sprints(
                     "subject": None,
                     "label": None,
                     "title": _short_projeto_title(a.caption),
+                    "autoestudos": ae_data["autoestudos"],
+                    "books": ae_data["books"],
                 })
 
         sprint_ponderadas = [
@@ -322,7 +356,7 @@ def _build_data(
             "disciplinas": _build_turma_disciplinas(activities, teacher_subjects),
         },
         "resumo": _build_resumo(activities, encontros, ponderadas, artifacts, subjects_by_teacher),
-        "sprints": _build_sprints(encontros, ponderadas, subjects_by_teacher),
+        "sprints": _build_sprints(encontros, ponderadas, subjects_by_teacher, activities=activities),
         "projeto": _build_projeto(artifacts),
         "prova": _build_prova(
             [a for a in activities if a.folder_number in _PROVA_WEEKS], teacher_subjects
@@ -370,6 +404,10 @@ def _render_template(data_json: str) -> str:
     template = (_ASSETS_DIR / "template.html").read_text(encoding="utf-8")
     style = (_ASSETS_DIR / "style.css").read_text(encoding="utf-8").rstrip("\n")
     script = (_ASSETS_DIR / "script.js").read_text(encoding="utf-8").rstrip("\n")
+    # The font is embedded as a data: URI for the same reason — the page is
+    # opened from the filesystem, often offline, so it can't fetch it.
+    font_b64 = base64.b64encode(_FONT_FILE.read_bytes()).decode("ascii")
+    style = style.replace("__FONT_URL__", f"data:font/woff2;base64,{font_b64}")
     return (
         template
         .replace("__STYLE__", style)

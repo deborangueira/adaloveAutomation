@@ -4,25 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Adalove — Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Ctext x='16' y='22.5' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
 <style>
 __STYLE__
 </style>
 </head>
 <body>
 <header>
-  <div class="tabs">
-    <button class="tab" data-view="calendario">Calendário</button>
-    <button class="tab" data-view="projeto">Projeto</button>
-    <button class="tab" data-view="prova">Prova</button>
-    <button class="tab" data-view="ponderadas">Ponderadas</button>
-    <button class="tab" data-view="turma">Turma</button>
+  <div class="header-inner">
+    <div class="tabs">
+      <button class="tab" data-view="calendario">Calendário</button>
+      <button class="tab" data-view="projeto">Projeto</button>
+      <button class="tab" data-view="prova">Prova</button>
+      <button class="tab" data-view="ponderadas">Ponderadas</button>
+      <button class="tab" data-view="turma">Turma</button>
+    </div>
+    <div class="module-progress" id="module-progress"></div>
+    <div class="header-turma" id="turma-header-container"></div>
   </div>
-  <div class="header-turma" id="turma-header-container"></div>
+  <div class="progress-track" aria-hidden="true"><span></span></div>
 </header>
 <main>
   <section class="view" id="view-calendario">
-    <div class="split-layout">
-      <div class="week-summary" id="resumo-table"></div>
+    <div class="split-layout split-layout--wide">
+      <div class="calendar-sidebar">
+        <div class="hoje-card" id="hoje-card"></div>
+        <div class="panel">
+          <h2 class="panel-title">Resumo do módulo</h2>
+          <div class="week-summary" id="resumo-table"></div>
+        </div>
+      </div>
       <div class="split-divider"></div>
       <div class="split-content" id="sprints"></div>
     </div>
@@ -38,7 +49,7 @@ __STYLE__
     <div class="split-layout">
       <nav class="split-nav" id="prova-nav"></nav>
       <div class="split-divider"></div>
-      <div class="split-content">
+      <div class="split-content panel">
         <div class="kind-filter" id="prova-kind-filter">
           <button class="active" data-kind="instrucoes">Instruções</button>
           <button data-kind="autoestudo">Autoestudo</button>
@@ -57,13 +68,15 @@ __STYLE__
     </div>
   </section>
   <section class="view" id="view-turma">
-    <div class="section">
-      <h2 id="turma-caption"></h2>
-      <dl class="info-list" id="turma-details"></dl>
-    </div>
-    <div class="section">
-      <h2>Disciplinas → Professores</h2>
-      <ul class="plain" id="turma-disciplinas"></ul>
+    <div class="turma-layout">
+      <div class="panel">
+        <h2 class="turma-caption" id="turma-caption"></h2>
+        <dl class="info-list" id="turma-details"></dl>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">Disciplinas e professores</h2>
+        <ul class="disciplina-list" id="turma-disciplinas"></ul>
+      </div>
     </div>
   </section>
 </main>
